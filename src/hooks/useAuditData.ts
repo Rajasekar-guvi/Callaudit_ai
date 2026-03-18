@@ -556,36 +556,6 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
     return () => window.removeEventListener('online', handleOnline);
   }, [setupRealtime, patchRow]);
 
-  // ── Optional: patch active rows when tab becomes visible ─
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.hidden) return;
-
-      setSubmissions((prev) => {
-        const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
-
-        const activeIds = prev
-          .filter((s) => {
-            // skip old stuck pending rows (webhook never sent)
-            if (s.status === 'pending' && (s as any).webhook_sent === false) return false;
-            // skip rows older than 30 mins (clearly stuck)
-            if (new Date(s.created_at).getTime() < thirtyMinsAgo) return false;
-            return s.status === 'pending' || s.status === 'processing';
-          })
-          .map((s) => s.id);
-
-        // Only patch genuinely active rows
-        if (activeIds.length > 0) {
-          activeIds.forEach((id) => patchRow(id));
-        }
-
-        return prev;
-      });
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [patchRow]);
 
   // ── Other hooks ─────────────────────────────────────────
   const getSubmissionById = useCallback(async (id: string) => {
