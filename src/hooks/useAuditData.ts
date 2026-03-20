@@ -419,8 +419,6 @@
 //   return "pending";
 // }
 
-
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { auditService } from "../services/auditService";
 import { AuditSubmission, AuditStatus } from "../types";
@@ -439,18 +437,24 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
   const isFetchingRef   = useRef(false);
   const lastDataHashRef = useRef<string | null>(null);
   const unsubscribeRef  = useRef<(() => void) | null>(null);
+  const submissionsRef  = useRef<AuditSubmission[]>([]);
+
+  // Keep ref in sync with state so intervals can read latest value
+  useEffect(() => {
+    submissionsRef.current = submissions;
+  }, [submissions]);
 
   // ── Normalize a single row ──────────────────────────────
-  const normalizeRow = (item: AuditSubmission): AuditSubmission => ({
+  const normalizeRow = useCallback((item: AuditSubmission): AuditSubmission => ({
     ...item,
     status: normalizeStatus(item.status),
     compliance_score:
       item.compliance_score === null || item.compliance_score === undefined
         ? undefined
         : item.compliance_score,
-  });
+  }), []);
 
-  // ── Fetch ALL rows once (initial load only) ─────────────
+  // ── Fetch ALL rows ──────────────────────────────────────
   const fetchSubmissions = useCallback(async () => {
     if (isFetchingRef.current) return;
     if (!navigator.onLine)     return;
@@ -473,9 +477,9 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
       setIsLoading(false);
       isFetchingRef.current = false;
     }
-  }, [limit]);
+  }, [limit, normalizeRow]);
 
-  // ── Patch a single row by id (no full refresh) ──────────
+  // ── Patch only ONE row by id ────────────────────────────
   const patchRow = useCallback(async (id: string) => {
     try {
       const fresh = await auditService.getSubmissionById(id);
@@ -485,42 +489,46 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
         prev.map((item) => item.id === id ? normalized : item)
       );
     } catch {
-      // silently ignore — UI still shows last known state
+      // silently ignore
     }
-  }, []);
+  }, [normalizeRow]);
 
   // ── Setup realtime subscription ─────────────────────────
   const setupRealtime = useCallback(() => {
-    // Cleanup existing subscription first
     unsubscribeRef.current?.();
 
-    unsubscribeRef.current = auditService.subscribeToSubmissions((payload) => {
-      const normalized = normalizeRow(payload.record);
+    unsubscribeRef.current = auditService.subscribeToSubmissions(
+      (payload) => {
+        const normalized = normalizeRow(payload.record);
 
-      if (payload.type === 'INSERT') {
-        // New submission — add to top of list instantly
-        setSubmissions((prev) => {
-          const exists = prev.some((s) => s.id === normalized.id);
-          return exists ? prev : [normalized, ...prev];
-        });
-        return;
-      }
+        if (payload.type === 'INSERT') {
+          setSubmissions((prev) => {
+            const exists = prev.some((s) => s.id === normalized.id);
+            return exists ? prev : [normalized, ...prev];
+          });
+          return;
+        }
 
-      if (payload.type === 'UPDATE') {
-        // Only that row updates — rest of table untouched
-        setSubmissions((prev) =>
-          prev.map((item) => item.id === normalized.id ? normalized : item)
-        );
-        return;
-      }
+        if (payload.type === 'UPDATE') {
+          setSubmissions((prev) =>
+            prev.map((item) => item.id === normalized.id ? normalized : item)
+          );
+          return;
+        }
 
-      if (payload.type === 'DELETE') {
-        setSubmissions((prev) =>
-          prev.filter((item) => item.id !== normalized.id)
-        );
+        if (payload.type === 'DELETE') {
+          setSubmissions((prev) =>
+            prev.filter((item) => item.id !== normalized.id)
+          );
+        }
+      },
+      // ── Channel died → reconnect immediately ──
+      () => {
+        console.warn('Channel dropped — reconnecting...');
+        setTimeout(() => setupRealtime(), 1000);
       }
-    });
-  }, []);
+    );
+  }, [normalizeRow]);
 
   // ── Initial load + realtime setup ──────────────────────
   useEffect(() => {
@@ -532,32 +540,44 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── On network restore — resubscribe + patch active rows ─
+  // ── Smart polling — ONLY for active rows ───────────────
+  // Runs every 10s but only fetches rows that are genuinely
+  // in-progress. Catches missed realtime events silently.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!navigator.onLine) return;
+
+      const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
+      const activeRows = submissionsRef.current.filter((s) => {
+        // skip: pending + webhook never sent (needs retry)
+        if (s.status === 'pending' && (s as any).webhook_sent === false) return false;
+        // skip: older than 30 mins (stuck)
+        if (new Date(s.created_at).getTime() < thirtyMinsAgo) return false;
+        // include: genuinely processing
+        return s.status === 'pending' || s.status === 'processing';
+      });
+
+      // No active rows → skip entirely, save network calls
+      if (activeRows.length === 0) return;
+
+      // Patch only active rows individually — no full refresh
+      activeRows.forEach((s) => patchRow(s.id));
+
+    }, 10000); // every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [patchRow]);
+
+  // ── Reconnect on network restore ────────────────────────
   useEffect(() => {
     const handleOnline = () => {
-      setupRealtime(); // reconnect websocket
-
-      // Only patch rows still in progress — not full table
-      setSubmissions((prev) => {
-        const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
-
-        const activeIds = prev
-          .filter((s) => {
-            if (s.status === 'pending' && (s as any).webhook_sent === false) return false;
-            if (new Date(s.created_at).getTime() < thirtyMinsAgo) return false;
-            return s.status === 'pending' || s.status === 'processing';
-          })
-          .map((s) => s.id);
-
-        activeIds.forEach((id) => patchRow(id));
-        return prev; // return unchanged, patchRow updates individually
-      });
+      setupRealtime();
+      fetchSubmissions(); // full refresh after network drop
     };
 
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [setupRealtime, patchRow]);
-
+  }, [setupRealtime, fetchSubmissions]);
 
   // ── Other hooks ─────────────────────────────────────────
   const getSubmissionById = useCallback(async (id: string) => {
@@ -569,7 +589,7 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
       setError(err instanceof Error ? err.message : "Failed to fetch submission");
       return null;
     }
-  }, []);
+  }, [normalizeRow]);
 
   const checkCallIdExists = useCallback(async (callId?: string) => {
     if (!callId) return false;
