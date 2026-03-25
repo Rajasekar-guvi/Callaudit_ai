@@ -269,7 +269,10 @@ const PREDEFINED_EMAILS = [
   'mohana.a@hclguvi.com',
   'kishorekumar@hclguvi.com',
   'nivethap@hclguvi.com',
-  'beharalakshmi@hclguvi.com'
+  'beharalakshmi@hclguvi.com',
+  "shakeela@hclguvi.com",
+  "prakash@hclguvi.com",
+  "arpitha@hclguvi.com"
 ];
 
 export const EmailSelect: React.FC<EmailSelectProps> = ({
