@@ -398,6 +398,7 @@ export const auditService = {
     audio_filename?: string;
     audio_size?: number;
     audio_url?: string;
+    selected_parameters?: string[];
   }): Promise<AuditSubmission> {
     const { data: result, error } = await supabase
       .from('audit_submissions')
@@ -453,6 +454,45 @@ export const auditService = {
     return data;
   },
 
+  // ── Check if audio URL exists in last 24 hours ────────
+  async checkAudioUrlDuplicate(audioUrl: string): Promise<{ isDuplicate: boolean; submittedAt?: string; submissionId?: string }> {
+    if (!audioUrl) return { isDuplicate: false };
+    
+    // Get submissions from last 24 hours with this URL
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data, error } = await supabase
+      .from('audit_submissions')
+      .select('id, created_at')
+      .eq('audio_url', audioUrl)
+      .gt('created_at', twentyFourHoursAgo)
+      .order('created_at', { ascending: false })
+      .maybeSingle();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    if (data) {
+      return {
+        isDuplicate: true,
+        submittedAt: data.created_at,
+        submissionId: data.id,
+      };
+    }
+    
+    return { isDuplicate: false };
+  },
+
+  async checkCallIdExists(callId?: string): Promise<boolean> {
+    if (!callId) return false;
+    const { data, error } = await supabase
+      .from('audit_submissions')
+      .select('id')
+      .eq('call_id', callId)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') throw error;
+    return !!data;
+  },
+
   async updateSubmissionWithWebhookResponse(
     id: string,
     webhookResponse: WebhookResponse
@@ -481,28 +521,15 @@ export const auditService = {
     return result;
   },
 
-  async checkCallIdExists(callId?: string): Promise<boolean> {
-    if (!callId) return false;
-    const { data, error } = await supabase
-      .from('audit_submissions')
-      .select('id')
-      .eq('call_id', callId)
-      .maybeSingle();
-    if (error && error.code !== 'PGRST116') throw error;
-    return !!data;
-  },
-
-  // ── Realtime subscription with status monitoring ──────────
+  // ── Realtime subscription with status monitoring ────────
   subscribeToSubmissions(
     callback: (payload: {
       type: 'INSERT' | 'UPDATE' | 'DELETE';
       record: AuditSubmission;
     }) => void,
-    onReconnectNeeded?: () => void  // called when channel dies
+    onReconnectNeeded?: () => void
   ) {
-    // Unique channel name per subscription — prevents deduplication
     const channelName = `audit_submissions_${Date.now()}`;
-
     const channel = supabase
       .channel(channelName)
       .on(
@@ -520,13 +547,11 @@ export const auditService = {
         }
       )
       .subscribe((status) => {
-        // Detect silent channel death and trigger reconnect
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           console.warn('Realtime channel dropped:', status);
           onReconnectNeeded?.();
         }
       });
-
     return () => { supabase.removeChannel(channel); };
   },
 

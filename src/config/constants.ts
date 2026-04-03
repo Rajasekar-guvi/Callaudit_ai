@@ -38,3 +38,78 @@ export const ALLOWED_AUDIO_DOMAINS = [
 export const CALL_TYPES = ['inbound', 'outbound'] as const;
 
 export const AUDIT_STATUS = ['pending', 'passed', 'failed', 'flagged'] as const;
+
+export interface ParameterCategory {
+  name: string;
+  parameters: string[];
+}
+
+export const AUDIT_PARAMETERS_BY_CATEGORY: ParameterCategory[] = [
+  {
+    name: 'Opening',
+    parameters: [
+      'BDA Introduction Pitch',
+      'Legal Mandate Pitch',
+    ]
+  },
+  {
+    name: 'Lead Discovery',
+    parameters: [
+      'Lead Acknowledged about Course Enquiry',
+      'Profiling',
+      'Did BDA Understand Lead Need',
+    ]
+  },
+  {
+    name: 'Course Pitch',
+    parameters: [
+      'Highlighted USPs',
+      'Industry Trend References',
+      'Syllabus Pitched',
+      'Certification Pitched',
+      'Branding',
+    ]
+  },
+  {
+    name: 'Pricing Discussion',
+    parameters: [
+      'Admission Fee Pitch',
+      'Fees Structure Pitch',
+      'CTC Range Pitch',
+      'Payment Capacity Checked',
+    ]
+  },
+  {
+    name: 'Post-Course Benefits',
+    parameters: [
+      'Placement Training',
+      'Placement Support with Hyrenet',
+      'Refund Policy Pitched',
+    ]
+  },
+  {
+    name: 'Objections & Concerns',
+    parameters: [
+      'Lead Concern in Course Enrolment',
+      'Did BDA Addressed the Lead Concern',
+      'Lead Objections towards Course Enrollment',
+      'Did BDA Handled Objections Effectively',
+    ]
+  },
+  {
+    name: 'Closing & Analysis',
+    parameters: [
+      'Created Need for Course',
+      'Urgency Creation',
+      'Observations',
+      'Reason for No Conversion',
+      'Fatal Pitch',
+      'Missed Opportunities by BDA',
+      'BDAs Strength',
+      'BDAs AoI',
+    ]
+  }
+];
+
+// Flat list for backward compatibility
+export const AUDIT_PARAMETERS: string[] = AUDIT_PARAMETERS_BY_CATEGORY.flatMap(cat => cat.parameters);

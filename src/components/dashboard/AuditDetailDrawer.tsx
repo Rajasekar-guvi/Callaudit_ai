@@ -1837,7 +1837,7 @@ function parseRawTranscript(transcript: string): RawLine[] {
     .split('\n')
     .filter(line => line.trim())
     .map(line => {
-      const match = line.match(/^(Agent|Lead)\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]:\s*(.+)$/);
+      const match = line.match(/^(Agent|BDA|Lead)\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]:\s*(.+)$/);
       if (!match) return null;
       return {
         speaker: match[1],
@@ -2009,12 +2009,29 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
               </div>
             </Section>
           )}
-
+          {/* Selected Audit Parameters */}
+          {((submission as any).selected_parameters?.length > 0) && (
+            <Section title="Audit Parameters">
+              <div className="flex flex-wrap gap-2">
+                {((submission as any).selected_parameters as string[]).map((param: string) => (
+                  <span
+                    key={param}
+                    className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                  >
+                    {param}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
+                {(submission as any).selected_parameters.length} parameter{(submission as any).selected_parameters.length > 1 ? 's' : ''} sent for AI scoring
+              </p>
+            </Section>
+          )}
           {/* Call Information */}
           <Section title="Call Information">
             <Field label="Email"         value={submission.email ?? 'N/A'} />
             <Field label="Call ID"       value={submission.call_id ?? 'N/A'} />
-            <Field label="Agent Name"    value={submission.analyst_name ?? 'N/A'} />
+            <Field label="Analyst Name"  value={submission.analyst_name ?? 'N/A'} />
             <Field label="Call Type"     value={submission.call_type ? submission.call_type.toUpperCase() : 'N/A'} />
             <Field label="Call Duration" value={formatDuration(submission.call_duration)} />
             <Field label="Submitted"     value={new Date(submission.created_at).toLocaleString()} />
@@ -2022,8 +2039,8 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
 
           {/* Audio Details */}
           <Section title="Audio Details">
-            <Field label="Filename"  value={submission.audio_filename || 'N/A'} />
-            <Field label="File Size" value={submission.audio_size ? `${(submission.audio_size / 1024 / 1024).toFixed(2)} MB` : 'N/A'} />
+            {/* <Field label="Filename"  value={submission.audio_filename || 'N/A'} /> */}
+            {/* <Field label="File Size" value={submission.audio_size ? `${(submission.audio_size / 1024 / 1024).toFixed(2)} MB` : 'N/A'} /> */}
             <Field label="Audio URL" value={submission.audio_url || 'Pending'} isCopyable />
           </Section>
 
@@ -2079,7 +2096,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
                         [{line.start}]
                       </span>
                       <span className={`font-semibold mr-1 ${
-                        line.speaker === 'Agent'
+                        line.speaker === 'Agent' || line.speaker === 'BDA'
                           ? 'text-blue-600 dark:text-blue-400'
                           : 'text-green-600 dark:text-green-400'
                       }`}>
