@@ -324,8 +324,13 @@ const shouldShowRetry = (submission: AuditSubmission): boolean => {
     submission.error_message &&
     submission.error_message !== 'null' &&
     submission.error_message !== '';
+
   return (
+    // webhook never reached n8n
     (submission.status === 'pending' && (submission as any).webhook_sent === false) ||
+    // n8n received but returned error → still pending
+    (submission.status === 'pending' && (submission as any).webhook_sent === true && !!hasRealError) ||
+    // n8n marked as failed with real error
     (submission.status === 'failed' && !!hasRealError)
   );
 };

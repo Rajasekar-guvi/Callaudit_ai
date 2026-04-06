@@ -379,3 +379,43 @@ Your UI sends:
 Let me know! 🚀
 
 
+
+
+{
+  "submission_id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "analyst@company.com",
+  "analyst_name": "Sarah Johnson",
+  "call_id": "CALL-20260403-001",
+  "call_duration": 420,
+  "call_type": "inbound",
+  "notes": "Quarterly review call",
+  "audio": {
+    "url": "https://storage.supabase.co/calls/audio-001.mp3"
+  },
+  "selected_parameters": [
+    "BDA Introduction Pitch",
+    "Legal Mandate Pitch",
+    "Lead Acknowledged about Course Enquiry",
+    "Profiling",
+    "Highlighted USPs",
+    "Certification Pitched",
+    "Payment Capacity Checked",
+    "Urgency Creation",
+    "Custom: Competitor Analysis",
+    "Custom: New Market Guidance"
+  ],
+  "custom_parameters": [
+    {
+      "id": "custom_1704067200000",
+      "name": "Competitor Analysis",
+      "description": "Check how agent addressed competitive landscape"
+    },
+    {
+      "id": "custom_1704067205000",
+      "name": "New Market Guidance",
+      "description": "Verify mention of Q2 market strategy updates"
+    }
+  ]
+}
+
+
