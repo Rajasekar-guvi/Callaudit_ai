@@ -262,9 +262,9 @@ export const useWebhookSubmit = () => {
       const payload = webhookService.transformFormDataToPayload(formData);
       (payload as any).submission_id = submission.id;
       payload.audio.url = formData.audioUrl;
-      payload.selected_parameters = allSelectedParams;
-      // Include custom parameters metadata
-      (payload as any).custom_parameters = formData.customParameters || [];
+      // Note: selected_parameters is now included by transformFormDataToPayload
+      // Just ensure custom_parameters is also included
+      payload.custom_parameters = formData.customParameters || [];
 
       // STEP 3 — Send webhook + track success/failure
       try {

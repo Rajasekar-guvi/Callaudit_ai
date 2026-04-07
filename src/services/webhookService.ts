@@ -3,6 +3,9 @@ import { WebhookPayload, WebhookResponse, FormData } from '../types';
 
 export const webhookService = {
   transformFormDataToPayload(formData: FormData): WebhookPayload {
+    // Extract custom parameter names for webhook
+    const customParamNames = formData.customParameters?.map(p => p.name) || [];
+    
     return {
       email: formData.email || undefined,
       notification_email: formData.notificationEmail || undefined,
@@ -16,6 +19,7 @@ export const webhookService = {
         size: 0,
         url: formData.audioUrl,
       },
+      selected_parameters: [...(formData.selectedParameters || []), ...customParamNames],
     };
   },
 

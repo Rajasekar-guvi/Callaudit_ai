@@ -162,6 +162,7 @@ export interface WebhookPayload {
     url: string;
   };
   selected_parameters?: string[]; // ── sent to n8n
+  custom_parameters?: CustomParameter[]; // ── custom params sent to n8n
 }
 
 export interface WebhookResponse {
