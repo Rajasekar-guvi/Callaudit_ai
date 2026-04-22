@@ -309,6 +309,7 @@ import { SkeletonLoader } from '../ui/SkeletonLoader';
 import { EmptyState } from '../ui/EmptyState';
 import { useAuditData } from '../../hooks/useAuditData';
 import { useWebhookSubmit } from '../../hooks/useWebhookSubmit';
+import { useToast } from '../../context/ToastContext';
 import { AuditSubmission, AuditStatus } from '../../types';
 import { AuditDetailDrawer } from './AuditDetailDrawer';
 import { FileText } from 'lucide-react';
@@ -371,14 +372,40 @@ const RetryButton: React.FC<{ submission: AuditSubmission; onRetried: () => void
 };
 
 export const AuditTable: React.FC = () => {
-  const { submissions = [], isLoading, fetchSubmissions } = useAuditData();
-  const [searchTerm, setSearchTerm]     = useState('');
+  const { submissions = [], isLoading, fetchSubmissions, getSubmissionByIdFull } = useAuditData();
+  const { showToast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AuditStatus | 'all'>('all');
-  const [agentFilter, setAgentFilter]   = useState<string>('all');
-  const [sortField, setSortField]       = useState<SortField>('created_at');
-  const [sortOrder, setSortOrder]       = useState<SortOrder>('desc');
+  const [agentFilter, setAgentFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [selectedSubmission, setSelectedSubmission] = useState<AuditSubmission | null>(null);
-  const [currentPage, setCurrentPage]   = useState(1);
+  const [loadingSubmissionId, setLoadingSubmissionId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // ✅ Fetch FULL data when opening detail drawer
+  const handleViewDetails = async (submission: AuditSubmission) => {
+    console.log('👁️ View button clicked for:', submission.id);
+    setLoadingSubmissionId(submission.id);
+    try {
+      console.log('📥 Fetching full details for submission:', submission.id);
+      const fullData = await getSubmissionByIdFull(submission.id);
+
+      if (!fullData) {
+        console.error('❌ getSubmissionByIdFull returned null/undefined');
+        showToast('Failed to load submission details', 'error');
+        return;
+      }
+
+      console.log('✅ Got full data:', fullData);
+      setSelectedSubmission(fullData);
+    } catch (error) {
+      console.error('❌ Error fetching details:', error);
+      showToast('Error loading submission details', 'error');
+    } finally {
+      setLoadingSubmissionId(null);
+    }
+  };
 
   const agents = useMemo(
     () => ['all', ...new Set(submissions.map((s) => s.analyst_name ?? '').filter(Boolean))],
@@ -388,11 +415,10 @@ export const AuditTable: React.FC = () => {
   const filteredAndSorted = useMemo(() => {
     const filtered = submissions.filter((s) => {
       const matchesSearch =
-        s.call_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.analyst_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.email?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
-      const matchesAgent  = agentFilter  === 'all' || s.analyst_name === agentFilter;
+      const matchesAgent = agentFilter === 'all' || s.analyst_name === agentFilter;
       return matchesSearch && matchesStatus && matchesAgent;
     });
 
@@ -407,10 +433,11 @@ export const AuditTable: React.FC = () => {
   }, [submissions, searchTerm, statusFilter, agentFilter, sortField, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
-  const safePage   = Math.min(currentPage, totalPages);
-  const pageStart  = (safePage - 1) * PAGE_SIZE;
-  const pageData   = filteredAndSorted.slice(pageStart, pageStart + PAGE_SIZE);
-
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const pageData = filteredAndSorted.slice(pageStart, pageStart + PAGE_SIZE);
+  const [leadStageFilter, setLeadStageFilter] = useState<string>('all');
+  const leadStages = useMemo(() => { return ['all', ...new Set(submissions.map((s) => s.lead_stage ?? '').filter(Boolean)),]; }, [submissions]);
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortOrder('asc'); }
@@ -450,8 +477,10 @@ export const AuditTable: React.FC = () => {
         </div>
 
         {/* Filters */}
-        <div className="mb-6 space-y-4 md:flex md:gap-4 md:space-y-0">
-          <div className="flex-1 relative">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+
+          {/* 🔍 Search */}
+          <div className="flex-1 min-w-[250px] relative">
             <Search className="absolute left-4 top-3 w-5 h-5 text-gray-400" />
             <input
               type="text"
@@ -462,12 +491,13 @@ export const AuditTable: React.FC = () => {
             />
           </div>
 
+          {/* 📊 Status */}
           <select
             value={statusFilter}
             onChange={(e) => handleFilterChange(() => setStatusFilter(e.target.value as AuditStatus | 'all'))}
             title="Filter by status"
             aria-label="Filter by status"
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-sm"
           >
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
@@ -476,18 +506,36 @@ export const AuditTable: React.FC = () => {
             <option value="flagged">Flagged</option>
           </select>
 
+          {/* 👤 Analyst */}
           <select
             value={agentFilter}
             onChange={(e) => handleFilterChange(() => setAgentFilter(e.target.value))}
-            title="Filter by agent"
-            aria-label="Filter by agent"
-            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500"
+            title="Filter by analyst"
+            aria-label="Filter by analyst"
+            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-sm"
           >
-            <option value="all">All Agents</option>
+            <option value="all">All Analysts</option>
             {agents.filter((a) => a !== 'all').map((agent) => (
               <option key={agent} value={agent}>{agent}</option>
             ))}
           </select>
+
+          {/* 🎯 Lead Stage (FIXED POSITION) */}
+          <select
+            value={leadStageFilter}
+            onChange={(e) => handleFilterChange(() => setLeadStageFilter(e.target.value))}
+            title="Filter by lead stage"
+            aria-label="Filter by lead stage"
+            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-sm"
+          >
+            <option value="all">All Lead Stages</option>
+            {leadStages.map((leadStage: string) => (
+              <option key={leadStage} value={leadStage}>
+                {leadStage.replace('-', ' ')}
+              </option>
+            ))}
+          </select>
+
         </div>
 
         {/* Table */}
@@ -496,21 +544,20 @@ export const AuditTable: React.FC = () => {
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 {([
-                  { label: 'Call ID',  field: 'call_id' },
-                  { label: 'Email',    field: 'email' },
-                  { label: 'Analyst',  field: 'analyst_name' },
-                  { label: 'Type',     field: 'call_type' },
-                  { label: 'Status',   field: 'status' },
-                  { label: 'Score',    field: 'compliance_score' },
-                  { label: 'Date',     field: 'created_at' },
-                  { label: '',         field: null },
+                  { label: 'Email', field: 'email' },
+                  { label: 'Analyst', field: 'analyst_name' },
+                  { label: 'Type', field: 'call_type' },
+                  { label: 'Lead Stage', field: null },
+                  { label: 'Status', field: 'status' },
+                  { label: 'Score', field: 'compliance_score' },
+                  { label: 'Date', field: 'created_at' },
+                  { label: '', field: null },
                 ] as { label: string; field: SortField | null }[]).map((col) => (
                   <th
                     key={col.field ?? 'action'}
                     onClick={() => col.field && handleSort(col.field)}
-                    className={`text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300 ${
-                      col.field ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white select-none' : ''
-                    }`}
+                    className={`text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300 ${col.field ? 'cursor-pointer hover:text-gray-900 dark:hover:text-white select-none' : ''
+                      }`}
                   >
                     <div className="flex items-center gap-1">
                       {col.label}
@@ -533,9 +580,6 @@ export const AuditTable: React.FC = () => {
                     transition={{ delay: index * 0.02 }}
                     className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                   >
-                    <td className="py-4 px-4 font-medium text-gray-900 dark:text-white">
-                      {submission.call_id || <span className="text-gray-400">—</span>}
-                    </td>
                     <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
                       {submission.email || <span className="text-gray-400">—</span>}
                     </td>
@@ -543,6 +587,15 @@ export const AuditTable: React.FC = () => {
                       {submission.analyst_name || <span className="text-gray-400">—</span>}
                     </td>
                     <td className="py-4 px-4 text-gray-600 dark:text-gray-400 capitalize">{submission.call_type}</td>
+                    <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
+                      {submission.lead_stage ? (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
+                          {submission.lead_stage.replace('-', ' ')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="py-4 px-4"><StatusBadge status={submission.status} /></td>
                     <td className="py-4 px-4">
                       {submission.compliance_score != null ? (
@@ -558,11 +611,12 @@ export const AuditTable: React.FC = () => {
                       <div className="flex items-center gap-2">
                         {/* View button — always visible */}
                         <button
-                          onClick={() => setSelectedSubmission(submission)}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-medium"
+                          onClick={() => handleViewDetails(submission)}
+                          disabled={loadingSubmissionId === submission.id}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Eye className="w-4 h-4" />
-                          View
+                          {loadingSubmissionId === submission.id ? 'Loading...' : 'View'}
                         </button>
 
                         {/* Retry button — only when webhook failed or n8n error */}
@@ -618,11 +672,10 @@ export const AuditTable: React.FC = () => {
                     <button
                       key={p}
                       onClick={() => setCurrentPage(p as number)}
-                      className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
-                        safePage === p
+                      className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${safePage === p
                           ? 'bg-blue-600 text-white'
                           : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
+                        }`}
                     >
                       {p}
                     </button>
@@ -654,3 +707,5 @@ export const AuditTable: React.FC = () => {
     </>
   );
 }
+
+

@@ -1712,7 +1712,7 @@
 // };
 
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { AuditSubmission } from '../../types';
@@ -1726,11 +1726,9 @@ interface AuditDetailDrawerProps {
 
 // ─── Helpers ────────────────────────────────────────────────
 
-// Fixes "NaNm NaNs" — handles both "00:02:29" string and number seconds
 function formatDuration(value: any): string {
   if (!value) return 'N/A';
   if (typeof value === 'string' && value.includes(':')) {
-    // already formatted like "00:02:29" — just return as-is
     return value;
   }
   const n = typeof value === 'string' ? parseFloat(value) : value;
@@ -1740,13 +1738,10 @@ function formatDuration(value: any): string {
   return `${m}m ${s}s`;
 }
 
-// Convert "00:02:14" → seconds (134). Also handles MM:SS:00 format from n8n.
 function timeToSeconds(t: string): number {
   const parts = t.trim().split(':').map(Number);
   if (parts.length === 3) {
     const [a, b, c] = parts;
-    // detect MM:SS:00 format (e.g. 04:17:00 meaning 4min 17sec)
-    // hours > 0, seconds = 0, hours value fits in minutes range
     if (a > 0 && a < 60 && c === 0) {
       return a * 60 + b;
     }
@@ -1765,63 +1760,68 @@ interface ParsedViolation {
   ranges: Array<{ start: number; end: number }>;
 }
 
-// Parse violations string into structured array
 function parseViolations(raw: any): ParsedViolation[] {
   if (!raw) return [];
 
-  // handle already-parsed array
   if (Array.isArray(raw)) {
-    return raw.map((v: any) => ({
-      flagColor: (v.severity === 'high' ? 'red' : v.severity === 'medium' ? 'orange' : 'yellow') as FlagColor,
-      title: v.description || v.type || '',
-      evidence: v.evidence || '',
-      ranges: [],
-    })).filter((v: ParsedViolation) => v.title);
+    return raw
+      .map((v: any) => ({
+        flagColor: (v.severity === 'high'
+          ? 'red'
+          : v.severity === 'medium'
+            ? 'orange'
+            : 'yellow') as FlagColor,
+        title: v.description || v.type || '',
+        evidence: v.evidence || '',
+        ranges: [],
+      }))
+      .filter((v: ParsedViolation) => v.title);
   }
 
   if (typeof raw !== 'string') return [];
 
-  // handle double-stringified JSON (n8n wraps in extra quotes)
   let unwrapped = raw;
   try {
     const first = JSON.parse(unwrapped);
-    if (typeof first === 'string') unwrapped = first; // was double-stringified
-    else if (Array.isArray(first)) return parseViolations(first); // was JSON array
-  } catch { /* not JSON, treat as plain text */ }
+    if (typeof first === 'string') unwrapped = first;
+    else if (Array.isArray(first)) return parseViolations(first);
+  } catch { }
 
-  // strip outer quotes + unescape ALL newline variants
   const text = unwrapped
     .replace(/^"|"$/g, '')
     .replace(/\\n/g, '\n')
     .replace(/\n/g, '\n')
     .trim();
+
   const blocks = text.split('-----------').filter((s: string) => s.trim());
 
-  return blocks.map((block: string): ParsedViolation => {
-    const lines = block.trim().split('\n').filter((l: string) => l.trim());
-    const flagLine = lines[0] || '';
+  return blocks
+    .map((block: string): ParsedViolation => {
+      const lines = block.trim().split('\n').filter((l: string) => l.trim());
+      const flagLine = lines[0] || '';
 
-    const flagMatch = flagLine.match(/\[(Red|Orange|Yellow) Flag\]\s*(.+)/i);
-    const flagColor: FlagColor = flagMatch
-      ? (flagMatch[1].toLowerCase() as FlagColor)
-      : 'yellow';
-    const title = flagMatch ? flagMatch[2].trim() : flagLine.trim();
+      const flagMatch = flagLine.match(/\[(Red|Orange|Yellow) Flag\]\s*(.+)/i);
+      const flagColor: FlagColor = flagMatch
+        ? (flagMatch[1].toLowerCase() as FlagColor)
+        : 'yellow';
+      const title = flagMatch ? flagMatch[2].trim() : flagLine.trim();
 
-    const evidenceLine = lines.find((l: string) => l.startsWith('Evidence:')) || '';
-    const evidence = evidenceLine.replace('Evidence:', '').trim();
+      const evidenceLine = lines.find((l: string) => l.startsWith('Evidence:')) || '';
+      const evidence = evidenceLine.replace('Evidence:', '').trim();
 
-    // extract all timestamp ranges e.g. 00:02:14–00:02:31 or single 00:11:52
-    const tsPattern = /(\d{1,2}:\d{2}(?::\d{2})?)(?:[–\-](\d{1,2}:\d{2}(?::\d{2})?))?/g;
-    const ranges: Array<{ start: number; end: number }> = [];
-    let m: RegExpExecArray | null;
-    while ((m = tsPattern.exec(evidence)) !== null) {
-      const start = timeToSeconds(m[1]);
-      const end = m[2] ? timeToSeconds(m[2]) : start + 20;
-      ranges.push({ start, end });
-    }
+      const tsPattern = /(\d{1,2}:\d{2}(?::\d{2})?)(?:[–\-](\d{1,2}:\d{2}(?::\d{2})?))?/g;
+      const ranges: Array<{ start: number; end: number }> = [];
+      let m: RegExpExecArray | null;
 
-    return { flagColor, title, evidence, ranges };
-  }).filter((v: ParsedViolation) => v.title);
+      while ((m = tsPattern.exec(evidence)) !== null) {
+        const start = timeToSeconds(m[1]);
+        const end = m[2] ? timeToSeconds(m[2]) : start + 20;
+        ranges.push({ start, end });
+      }
+
+      return { flagColor, title, evidence, ranges };
+    })
+    .filter((v: ParsedViolation) => v.title);
 }
 
 interface RawLine {
@@ -1830,6 +1830,16 @@ interface RawLine {
   speaker: string;
   text: string;
 }
+const getTranscriptUrl = (url?: string) => {
+  if (!url) return null;
+
+  // already full url
+  if (url.startsWith('http')) return url;
+
+  const base = import.meta.env.VITE_SUPABASE_URL;
+
+  return `${base}/storage/v1/object/public/transcripts/${url.replace(/^transcripts\//, '')}`;
+};
 
 function parseRawTranscript(transcript: string): RawLine[] {
   if (!transcript) return [];
@@ -1848,6 +1858,7 @@ function parseRawTranscript(transcript: string): RawLine[] {
     })
     .filter(Boolean) as RawLine[];
 }
+
 function getHighlight(startSec: number, violations: ParsedViolation[]): FlagColor | null {
   for (const v of violations) {
     for (const range of v.ranges) {
@@ -1859,7 +1870,10 @@ function getHighlight(startSec: number, violations: ParsedViolation[]): FlagColo
   return null;
 }
 
-const FLAG_STYLES: Record<FlagColor, { bg: string; border: string; badge: string; text: string; line: string; bar: string }> = {
+const FLAG_STYLES: Record<
+  FlagColor,
+  { bg: string; border: string; badge: string; text: string; line: string; bar: string }
+> = {
   red: {
     bg: 'bg-red-50 dark:bg-red-900/20',
     border: 'border-red-200 dark:border-red-800',
@@ -1895,39 +1909,92 @@ const FLAG_EMOJI: Record<FlagColor, string> = {
 // ─── Main Component ──────────────────────────────────────────
 
 export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission, onClose }) => {
+  const [transcriptContent, setTranscriptContent] = useState('');
+  const [isTranscriptLoading, setIsTranscriptLoading] = useState(false);
+
   useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
 
-  const violations = useMemo(() => {
-    const raw = (submission as any).violations || (submission as any).spoken_evidence;
-    return parseViolations(raw);
-  }, [submission]);
-  const rawLines = useMemo(() => parseRawTranscript((submission as any).transcript || ''), [submission]);
+  useEffect(() => {
+    const fetchTranscript = async () => {
+      const cacheKey = `audit-transcript:${submission.id}`;
+      // 🧠 Check cache first
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        setTranscriptContent(cached);
+        return;
+      }
 
-  const redCount    = violations.filter(v => v.flagColor === 'red').length;
+      const finalUrl = getTranscriptUrl(submission?.transcript_url);
+      const fallbackTranscript = submission.transcript || '';
+
+      // 🔥 NEW LOGIC → Try URL first
+      if (finalUrl) {
+        setIsTranscriptLoading(true);
+        try {
+          console.log('📡 Fetching transcript from URL:', finalUrl);
+          const res = await fetch(finalUrl);
+
+          if (res.ok) {
+            const text = await res.text();
+
+            console.log('✅ Transcript loaded from URL');
+            setTranscriptContent(text);
+            sessionStorage.setItem(cacheKey, text);
+            return; // 🚨 IMPORTANT: stop here if success
+          } else {
+            console.error('❌ URL fetch failed:', res.status);
+          }
+        } catch (err) {
+          console.error('❌ URL fetch error:', err);
+        } finally {
+          setIsTranscriptLoading(false);
+        }
+      }
+
+      // 🧯 FALLBACK → Old DB transcript
+      console.log('⚠️ Using fallback transcript from DB');
+      setTranscriptContent(fallbackTranscript);
+    };
+
+    fetchTranscript();
+  }, [submission.id, submission.transcript_url, submission.transcript]);
+
+  const violations = useMemo(() => {
+    const raw = submission.violations || submission.spoken_evidence;
+    return parseViolations(raw);
+  }, [submission.violations, submission.spoken_evidence]);
+
+  const rawLines = useMemo(() => parseRawTranscript(transcriptContent), [transcriptContent]);
+
+  const redCount = violations.filter(v => v.flagColor === 'red').length;
   const orangeCount = violations.filter(v => v.flagColor === 'orange').length;
   const yellowCount = violations.filter(v => v.flagColor === 'yellow').length;
 
   return (
     <>
-      {/* Backdrop */}
       <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         onClick={onClose}
         className="fixed inset-0 bg-black/40 z-40"
       />
 
-      {/* Drawer */}
       <motion.div
-        initial={{ x: 520 }} animate={{ x: 0 }} exit={{ x: 520 }}
+        initial={{ x: 520 }}
+        animate={{ x: 0 }}
+        exit={{ x: 520 }}
         transition={{ type: 'spring', bounce: 0.1 }}
         className="fixed right-0 top-0 h-full w-full md:w-[500px] bg-white dark:bg-slate-900 shadow-2xl z-50 overflow-y-auto"
-        role="dialog" aria-modal="true"
+        role="dialog"
+        aria-modal="true"
       >
-        {/* Header */}
         <div className="sticky top-0 flex items-center justify-between p-5 bg-gradient-to-r from-blue-600 to-purple-700 text-white z-10 shadow-lg">
           <div>
             <h2 className="text-xl font-bold">Audit Details</h2>
@@ -1935,14 +2002,16 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
               <p className="text-xs text-white/70 mt-0.5">Call ID: {submission.call_id}</p>
             )}
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-lg transition-colors" aria-label="Close">
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            aria-label="Close"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-5 space-y-6">
-
-          {/* Compliance Score */}
           <Section title="Compliance Score">
             <div className="flex items-center gap-4">
               <div className="text-4xl font-bold text-gray-900 dark:text-white">
@@ -1960,7 +2029,6 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
             </div>
           </Section>
 
-          {/* Violation Summary Counters */}
           {violations.length > 0 && (
             <Section title="Violation Summary">
               <div className="flex gap-2">
@@ -1986,7 +2054,6 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
             </Section>
           )}
 
-          {/* Violations List */}
           {violations.length > 0 && (
             <Section title="Violations">
               <div className="space-y-2">
@@ -2009,11 +2076,11 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
               </div>
             </Section>
           )}
-          {/* Selected Audit Parameters */}
-          {((submission as any).selected_parameters?.length > 0) && (
+
+          {!!submission.selected_parameters?.length && (
             <Section title="Audit Parameters">
               <div className="flex flex-wrap gap-2">
-                {((submission as any).selected_parameters as string[]).map((param: string) => (
+                {submission.selected_parameters.map((param: string) => (
                   <span
                     key={param}
                     className="text-xs px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
@@ -2023,35 +2090,60 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
                 ))}
               </div>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                {(submission as any).selected_parameters.length} parameter{(submission as any).selected_parameters.length > 1 ? 's' : ''} sent for AI scoring
+                {submission.selected_parameters.length} parameter{submission.selected_parameters.length > 1 ? 's' : ''} sent for AI scoring
               </p>
             </Section>
           )}
-          {/* Call Information */}
+
           <Section title="Call Information">
-            <Field label="Email"         value={submission.email ?? 'N/A'} />
-            <Field label="Call ID"       value={submission.call_id ?? 'N/A'} />
-            <Field label="Analyst Name"  value={submission.analyst_name ?? 'N/A'} />
-            <Field label="Call Type"     value={submission.call_type ? submission.call_type.toUpperCase() : 'N/A'} />
+            <Field label="Email" value={submission.email ?? 'N/A'} />
+            <Field label="Call ID" value={submission.call_id ?? 'N/A'} />
+            <Field label="Analyst Name" value={submission.analyst_name ?? 'N/A'} />
+            <Field label="Call Type" value={submission.call_type ? submission.call_type.toUpperCase() : 'N/A'} />
             <Field label="Call Duration" value={formatDuration(submission.call_duration)} />
-            <Field label="Submitted"     value={new Date(submission.created_at).toLocaleString()} />
+            <Field label="Submitted" value={new Date(submission.created_at).toLocaleString()} />
           </Section>
 
-          {/* Audio Details */}
+          {(submission.lead_stage || submission.lsq_link) && (
+            <Section title="Lead Information">
+              {submission.lead_stage && (
+                <Field
+                  label="Lead Stage"
+                  value={
+                    <span className="inline-block text-xs px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
+                      {submission.lead_stage.replace('-', ' ')}
+                    </span>
+                  }
+                />
+              )}
+              {submission.lsq_link && (
+                <Field
+                  label="LSQ Link"
+                  value={
+                    <a
+                      href={submission.lsq_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-medium"
+                    >
+                      Open in LeadSquare
+                    </a>
+                  }
+                />
+              )}
+            </Section>
+          )}
+
           <Section title="Audio Details">
-            {/* <Field label="Filename"  value={submission.audio_filename || 'N/A'} /> */}
-            {/* <Field label="File Size" value={submission.audio_size ? `${(submission.audio_size / 1024 / 1024).toFixed(2)} MB` : 'N/A'} /> */}
             <Field label="Audio URL" value={submission.audio_url || 'Pending'} isCopyable />
           </Section>
 
-          {/* Notes */}
           {submission.notes && (
             <Section title="Notes">
               <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{submission.notes}</p>
             </Section>
           )}
 
-          {/* Audio Playback */}
           {submission.audio_url && submission.status !== 'pending' && (
             <Section title="Audio Playback">
               <audio controls className="w-full rounded-lg" src={submission.audio_url}>
@@ -2060,7 +2152,6 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
             </Section>
           )}
 
-          {/* Full Transcript — highlighted using raw_transcript */}
           {rawLines.length > 0 ? (
             <Section title="Full Transcript">
               {violations.length > 0 && (
@@ -2079,27 +2170,28 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
                   </span>
                 </div>
               )}
+
               <div className="bg-gray-100 dark:bg-gray-800 rounded-xl max-h-72 overflow-y-auto p-3 space-y-0.5">
                 {rawLines.map((line, idx) => {
-                  const startSec  = timeToSeconds(line.start);
+                  const startSec = timeToSeconds(line.start);
                   const highlight = getHighlight(startSec, violations);
-                  const s         = highlight ? FLAG_STYLES[highlight] : null;
+                  const s = highlight ? FLAG_STYLES[highlight] : null;
 
                   return (
                     <div
                       key={idx}
-                      className={`px-2 py-0.5 rounded text-xs leading-relaxed ${
-                        s ? `${s.line} border-l-2 ${s.bar}` : ''
-                      }`}
+                      className={`px-2 py-0.5 rounded text-xs leading-relaxed ${s ? `${s.line} border-l-2 ${s.bar}` : ''
+                        }`}
                     >
                       <span className="text-gray-400 dark:text-gray-500 font-mono mr-1.5">
                         [{line.start}]
                       </span>
-                      <span className={`font-semibold mr-1 ${
-                        line.speaker === 'Agent' || line.speaker === 'BDA'
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-green-600 dark:text-green-400'
-                      }`}>
+                      <span
+                        className={`font-semibold mr-1 ${line.speaker === 'Agent' || line.speaker === 'BDA'
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-green-600 dark:text-green-400'
+                          }`}
+                      >
                         {line.speaker}:
                       </span>
                       <span className={s ? s.text : 'text-gray-700 dark:text-gray-300'}>
@@ -2109,6 +2201,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
                   );
                 })}
               </div>
+
               <button
                 onClick={() => {
                   const text = rawLines.map(l => `[${l.start}] ${l.speaker}: ${l.text}`).join('\n');
@@ -2119,25 +2212,28 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
                 📋 Copy Transcript
               </button>
             </Section>
-
-          ) : submission.transcript ? (
-            // Fallback: plain transcript if raw_transcript not available
+          ) : transcriptContent ? (
             <Section title="Full Transcript">
               <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-xl max-h-64 overflow-y-auto">
                 <p className="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                  {submission.transcript}
+                  {transcriptContent}
                 </p>
               </div>
               <button
-                onClick={() => submission.transcript && navigator.clipboard.writeText(submission.transcript)}
+                onClick={() => navigator.clipboard.writeText(transcriptContent)}
                 className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
               >
                 📋 Copy Transcript
               </button>
             </Section>
+          ) : isTranscriptLoading ? (
+            <Section title="Full Transcript">
+              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-xl">
+                <p className="text-xs text-gray-500 dark:text-gray-400">Loading transcript...</p>
+              </div>
+            </Section>
           ) : null}
 
-          {/* AI Observations */}
           {submission.observations && (
             <Section title="AI Observations">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
@@ -2147,14 +2243,11 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
               </div>
             </Section>
           )}
-
         </div>
       </motion.div>
     </>
   );
 };
-
-// ─── Sub-components ──────────────────────────────────────────
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div>
@@ -2165,12 +2258,18 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   </div>
 );
 
-const Field: React.FC<{ label: string; value: React.ReactNode; isCopyable?: boolean }> = ({ label, value, isCopyable }) => (
+const Field: React.FC<{ label: string; value: React.ReactNode; isCopyable?: boolean }> = ({
+  label,
+  value,
+  isCopyable,
+}) => (
   <div className="flex justify-between items-start gap-4">
     <span className="text-xs font-medium text-gray-500 dark:text-gray-400 flex-shrink-0">{label}</span>
     <span
       className={`text-sm text-gray-900 dark:text-white text-right break-all ${isCopyable ? 'cursor-pointer hover:text-blue-500' : ''}`}
-      onClick={() => { if (isCopyable && typeof value === 'string') navigator.clipboard.writeText(value); }}
+      onClick={() => {
+        if (isCopyable && typeof value === 'string') navigator.clipboard.writeText(value);
+      }}
     >
       {value}
     </span>

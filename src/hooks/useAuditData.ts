@@ -428,7 +428,7 @@ interface UseAuditDataOptions {
 }
 
 export const useAuditData = (options?: UseAuditDataOptions) => {
-  const { limit = 100 } = options || {};
+  const { limit = 50 } = options || {}; // ✅ Reduced from 100 to 50 to lower egress
 
   const [submissions, setSubmissions] = useState<AuditSubmission[]>([]);
   const [isLoading, setIsLoading]     = useState(false);
@@ -591,6 +591,18 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
     }
   }, [normalizeRow]);
 
+  // ✅ Get FULL submission data for detail drawer (includes transcript, violations)
+  const getSubmissionByIdFull = useCallback(async (id: string) => {
+    try {
+      const submission = await auditService.getSubmissionByIdFull(id);
+      if (!submission) return null;
+      return normalizeRow(submission);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch submission details");
+      return null;
+    }
+  }, [normalizeRow]);
+
   const checkCallIdExists = useCallback(async (callId?: string) => {
     if (!callId) return false;
     try {
@@ -606,6 +618,7 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
     error,
     fetchSubmissions,
     getSubmissionById,
+    getSubmissionByIdFull,
     checkCallIdExists,
   };
 };
