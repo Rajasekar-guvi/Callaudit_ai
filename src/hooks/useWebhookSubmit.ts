@@ -226,42 +226,51 @@ export const useWebhookSubmit = () => {
 
   const lastSubmitRef = useRef<number>(0);
 
-  // ── Single submit ─────────────────────────────────────────
   const submit = async (formData: FormData) => {
     const now = Date.now();
     const secondsSinceLast = (now - lastSubmitRef.current) / 1000;
+
     if (lastSubmitRef.current > 0 && secondsSinceLast < 30) {
       const wait = Math.ceil(30 - secondsSinceLast);
-      setState({ isLoading: false, error: `Please wait ${wait}s before submitting again`, success: false });
+      setState({
+        isLoading: false,
+        error: `Please wait ${wait}s before submitting again`,
+        success: false,
+      });
       throw new Error(`Rate limited — wait ${wait}s`);
     }
+
     lastSubmitRef.current = now;
     setState({ isLoading: true, error: null, success: false });
 
     try {
       const allSelectedParams = [
         ...(formData.selectedParameters || []),
-        ...(formData.customParameters?.map(p => p.name) || []),
+        ...(formData.customParameters?.map((p) => p.name) || []),
       ];
 
       const isVC = formData.mediaType === 'video';
       const mediaUrl = isVC ? (formData.vcUrl || '') : (formData.audioUrl || '');
+
       if (mediaUrl) {
         const duplicateCheck = await auditService.checkAudioUrlExists(mediaUrl);
         if (duplicateCheck.isDuplicate) {
           setState({
             isLoading: false,
-            error: `This audio was already submitted recently`,
+            error: 'This audio was already submitted recently',
             success: false,
           });
-          return; 
-          }
+          return;
         }
+      }
+
       const vcPlatform = isVC ? detectVCPlatform(mediaUrl) : undefined;
+
       const submission = await auditService.createSubmission({
         email: formData.email || undefined,
         analyst_name: formData.analystName || undefined,
         call_id: formData.callId || undefined,
+        // call_duration: formData.callDuration || '',
         call_duration: formData.callDuration
           ? webhookService.parseTimeToSeconds(formData.callDuration)
           : 0,
@@ -274,6 +283,11 @@ export const useWebhookSubmit = () => {
         vc_platform: vcPlatform,
         lead_stage: formData.leadStage,
         lsq_link: formData.lsqLink,
+        call_category: formData.callCategory,
+        coordinator_type: formData.coordinatorType,
+        learner_email: formData.learnerEmail || undefined,
+        lsq_id: formData.lsqId || undefined,
+
       });
 
       const payload = webhookService.transformFormDataToPayload(formData);
@@ -291,108 +305,115 @@ export const useWebhookSubmit = () => {
         ]);
         await auditService.markWebhookSent(submission.id);
       } catch (webhookError) {
-        const errorMsg = webhookError instanceof Error ? webhookError.message : 'Webhook failed';
+        const errorMsg =
+          webhookError instanceof Error ? webhookError.message : 'Webhook failed';
         await auditService.saveWebhookError(submission.id, errorMsg);
-        console.warn('Webhook failed, error saved. Retry button will appear:', webhookError);
+        console.warn(
+          'Webhook failed, error saved. Retry button will appear:',
+          webhookError
+        );
       }
 
       setState({ isLoading: false, error: null, success: true });
       return submission.id;
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Submission failed';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Submission failed';
       setState({ isLoading: false, error: errorMessage, success: false });
       throw error;
     }
   };
 
-  // ── Bulk submit (audio only) ──────────────────────────────
-  const submitBulk = useCallback(async (
-    bulkItems: BulkUrlItem[],
-    baseFormData: FormData,
-    onProgress: (updated: BulkUrlItem[]) => void
-  ): Promise<string[]> => {
-    setState({ isLoading: true, error: null, success: false });
+  const submitBulk = useCallback(
+    async (
+      bulkItems: BulkUrlItem[],
+      baseFormData: FormData,
+      onProgress: (updated: BulkUrlItem[]) => void
+    ): Promise<string[]> => {
+      setState({ isLoading: true, error: null, success: false });
 
-    const allSelectedParams = [
-      ...(baseFormData.selectedParameters || []),
-      ...(baseFormData.customParameters?.map(p => p.name) || []),
-    ];
+      const allSelectedParams = [
+        ...(baseFormData.selectedParameters || []),
+        ...(baseFormData.customParameters?.map((p) => p.name) || []),
+      ];
 
-    const results = [...bulkItems];
-    const submittedIds: string[] = [];
+      const results = [...bulkItems];
+      const submittedIds: string[] = [];
 
-    for (let i = 0; i < results.length; i++) {
-      if (results[i].status !== 'valid') continue;
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].status !== 'valid') continue;
 
-      // Mark as submitting
-      results[i] = { ...results[i], status: 'submitting' };
-      onProgress([...results]);
-
-      try {
-        const submission = await auditService.createSubmission({
-          email: baseFormData.email || undefined,
-          analyst_name: baseFormData.analystName || undefined,
-          call_id: baseFormData.callId || undefined,
-          call_duration: baseFormData.callDuration
-            ? webhookService.parseTimeToSeconds(baseFormData.callDuration)
-            : 0,
-          call_type: baseFormData.callType,
-          notes: baseFormData.notes || undefined,
-          audio_url: results[i].url,
-          selected_parameters: allSelectedParams,
-          custom_parameters: baseFormData.customParameters || [],
-          media_type: 'audio',
-          lead_stage: baseFormData.leadStage,
-          lsq_link: baseFormData.lsqLink,
-        });
-
-        const payload = webhookService.transformFormDataToPayload({
-          ...baseFormData,
-          audioUrl: results[i].url,
-        });
-        (payload as any).submission_id = submission.id;
-        payload.audio.url = results[i].url;
+        results[i] = { ...results[i], status: 'submitting' };
+        onProgress([...results]);
 
         try {
-          await Promise.race([
-            webhookService.sendWithRetry(payload),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Webhook timeout')), 8000)
-            ),
-          ]);
-          await auditService.markWebhookSent(submission.id);
+          const submission = await auditService.createSubmission({
+            email: baseFormData.email || undefined,
+            analyst_name: baseFormData.analystName || undefined,
+            call_id: baseFormData.callId || undefined,
+            // call_duration: baseFormData.callDuration || '',
+            call_duration: baseFormData.callDuration
+              ? webhookService.parseTimeToSeconds(baseFormData.callDuration)
+              : 0,
+            call_type: baseFormData.callType,
+            notes: baseFormData.notes || undefined,
+            audio_url: results[i].url,
+            selected_parameters: allSelectedParams,
+            custom_parameters: baseFormData.customParameters || [],
+            media_type: 'audio',
+            lead_stage: baseFormData.leadStage,
+            lsq_link: baseFormData.lsqLink,
+          });
+
+          const payload = webhookService.transformFormDataToPayload({
+            ...baseFormData,
+            audioUrl: results[i].url,
+          });
+          (payload as any).submission_id = submission.id;
+          payload.audio.url = results[i].url;
+
+          try {
+            await Promise.race([
+              webhookService.sendWithRetry(payload),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Webhook timeout')), 8000)
+              ),
+            ]);
+            await auditService.markWebhookSent(submission.id);
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Webhook failed';
+            await auditService.saveWebhookError(submission.id, errorMsg);
+          }
+
+          submittedIds.push(submission.id);
+          results[i] = { ...results[i], status: 'submitted' };
+          onProgress([...results]);
+
+          if (i < results.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
         } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Webhook failed';
-          await auditService.saveWebhookError(submission.id, errorMsg);
+          const errorMsg = err instanceof Error ? err.message : 'Failed';
+          console.error(
+            `❌ Bulk submission failed for URL ${results[i].url}:`,
+            errorMsg,
+            err
+          );
+          results[i] = {
+            ...results[i],
+            status: 'failed',
+            error: errorMsg,
+          };
+          onProgress([...results]);
         }
-
-        submittedIds.push(submission.id);
-        results[i] = { ...results[i], status: 'submitted' };
-        onProgress([...results]);
-
-        // 500ms delay between submissions — safe for n8n
-        if (i < results.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed';
-        console.error(`❌ Bulk submission failed for URL ${results[i].url}:`, errorMsg, err);
-        results[i] = {
-          ...results[i],
-          status: 'failed',
-          error: errorMsg,
-        };
-        onProgress([...results]);
       }
-    }
 
-    setState({ isLoading: false, error: null, success: true });
-    return submittedIds;
-  }, []);
+      setState({ isLoading: false, error: null, success: true });
+      return submittedIds;
+    },
+    []
+  );
 
-  // ── Retry ─────────────────────────────────────────────────
   const retry = async (submission: any) => {
     try {
       await auditService.resetForRetry(submission.id);
@@ -410,6 +431,12 @@ export const useWebhookSubmit = () => {
         custom_parameters: submission.custom_parameters || [],
         media_type: submission.media_type || 'audio',
         vc_platform: submission.vc_platform,
+        lead_stage: submission.lead_stage,
+        lsq_link: submission.lsq_link,
+        call_category: submission.call_category,
+        coordinator_type: submission.coordinator_type,
+        learner_email: submission.learner_email,
+        lsq_id: submission.lsq_id,
       };
 
       await Promise.race([
@@ -420,7 +447,6 @@ export const useWebhookSubmit = () => {
       ]);
 
       await auditService.markWebhookSent(submission.id);
-
     } catch (error) {
       console.warn('Retry webhook failed:', error);
     }

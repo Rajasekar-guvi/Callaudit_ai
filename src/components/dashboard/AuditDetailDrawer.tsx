@@ -1840,24 +1840,61 @@ const getTranscriptUrl = (url?: string) => {
 
   return `${base}/storage/v1/object/public/transcripts/${url.replace(/^transcripts\//, '')}`;
 };
-
 function parseRawTranscript(transcript: string): RawLine[] {
   if (!transcript) return [];
+
   return transcript
     .split('\n')
     .filter(line => line.trim())
     .map(line => {
-      const match = line.match(/^(Agent|BDA|Lead)\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]:\s*(.+)$/);
-      if (!match) return null;
-      return {
-        speaker: match[1],
-        start: match[2],
-        end: match[2],
-        text: match[3],
-      };
+      const rangeMatch = line.match(
+        /^(Agent|BDA|Lead)\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\s*-\s*(\d{1,2}:\d{2}(?::\d{2})?)\]:\s*(.+)$/
+      );
+
+      if (rangeMatch) {
+        return {
+          speaker: rangeMatch[1],
+          start: rangeMatch[2],
+          end: rangeMatch[3],
+          text: rangeMatch[4],
+        };
+      }
+
+      const singleMatch = line.match(
+        /^(Agent|BDA|Lead)\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]:\s*(.+)$/
+      );
+
+      if (singleMatch) {
+        return {
+          speaker: singleMatch[1],
+          start: singleMatch[2],
+          end: singleMatch[2],
+          text: singleMatch[3],
+        };
+      }
+
+      return null;
     })
     .filter(Boolean) as RawLine[];
 }
+
+// function parseRawTranscript(transcript: string): RawLine[] {
+//   if (!transcript) return [];
+//   return transcript
+//     .split('\n')
+//     .filter(line => line.trim())
+//     .map(line => {
+//       const match = line.match(/^(Agent|BDA|Lead)\s*\[(\d{1,2}:\d{2}(?::\d{2})?)\]:\s*(.+)$/);
+//       if (!match) return null;
+//       return {
+//         speaker: match[1],
+//         start: match[2],
+//         end: match[2],
+//         text: match[3],
+//       };
+//     })
+//     .filter(Boolean) as RawLine[];
+// }
 
 function getHighlight(startSec: number, violations: ParsedViolation[]): FlagColor | null {
   for (const v of violations) {
@@ -1931,7 +1968,8 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
       }
 
       const finalUrl = getTranscriptUrl(submission?.transcript_url);
-      const fallbackTranscript = submission.transcript || '';
+      // const fallbackTranscript = submission.transcript || '';
+      const fallbackTranscript =submission.raw_transcript ||submission.transcript ||'';
 
       // 🔥 NEW LOGIC → Try URL first
       if (finalUrl) {
@@ -1963,6 +2001,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
     };
 
     fetchTranscript();
+  
   }, [submission.id, submission.transcript_url, submission.transcript]);
 
   const violations = useMemo(() => {

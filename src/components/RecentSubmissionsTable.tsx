@@ -626,7 +626,6 @@ interface RecentSubmissionsTableProps {
   newSubmissionId?: string | null;
 }
 
-/* ✅ URL FORMATTER */
 const getReadableUrl = (url: string) => {
   try {
     const u = new URL(url);
@@ -637,6 +636,27 @@ const getReadableUrl = (url: string) => {
   }
 };
 
+const formatDuration = (value?: number | string) => {
+  if (value === null || value === undefined || value === '') return 'N/A';
+
+  if (typeof value === 'string' && value.includes(':')) {
+    return value;
+  }
+
+  const totalSeconds = Number(value);
+  if (Number.isNaN(totalSeconds)) return 'N/A';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+};
+
 export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
   refreshTrigger = 0,
   newSubmissionId,
@@ -645,20 +665,19 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  // ✅ LIMIT TO 5
   const recentSubmissions = submissions.slice(0, 5);
 
   useEffect(() => {
     if (!newSubmissionId) return;
-    setProcessingIds(prev => new Set([...prev, newSubmissionId]));
+    setProcessingIds((prev) => new Set([...prev, newSubmissionId]));
   }, [newSubmissionId]);
 
   useEffect(() => {
-    processingIds.forEach(id => {
-      const sub = submissions.find(s => s.id === id);
+    processingIds.forEach((id) => {
+      const sub = submissions.find((s) => s.id === id);
       if (sub && sub.status !== 'pending' && sub.status !== 'processing') {
         setTimeout(() => {
-          setProcessingIds(prev => {
+          setProcessingIds((prev) => {
             const next = new Set(prev);
             next.delete(id);
             return next;
@@ -675,7 +694,9 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
   if (isLoading) {
     return (
       <GlassmorphismCard className="p-6 md:p-8">
-        <h3 className="text-xl font-bold mb-6">Recent Submissions</h3>
+        <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+          Recent Submissions
+        </h3>
         <div className="space-y-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonLoader key={i} type="table-row" />
@@ -688,7 +709,9 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
   if (recentSubmissions.length === 0) {
     return (
       <GlassmorphismCard className="p-6 md:p-8">
-        <h3 className="text-xl font-bold mb-6">Recent Submissions</h3>
+        <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+          Recent Submissions
+        </h3>
         <EmptyState
           icon={FileText}
           title="No submissions yet"
@@ -701,19 +724,20 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
   return (
     <GlassmorphismCard className="overflow-hidden">
       <div className="p-6 md:p-8">
-        <h3 className="text-xl font-bold mb-6">Recent Submissions</h3>
+        <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-gray-100">
+          Recent Submissions
+        </h3>
 
-        {/* ✅ FIX: allow tooltip overflow */}
         <div className="overflow-x-auto overflow-visible">
           <table className="w-full">
             <thead>
-              <tr className="border-b">
-                <th className="text-left py-4 px-4">Analyst</th>
-                <th className="text-left py-4 px-4">Email</th>
-                <th className="text-left py-4 px-4">Type</th>
-                <th className="text-left py-4 px-4">Status</th>
-                <th className="text-left py-4 px-4">Score</th>
-                <th className="text-left py-4 px-4">Date</th>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="text-left py-4 px-4 text-gray-700 dark:text-gray-200">Analyst</th>
+                <th className="text-left py-4 px-4 text-gray-700 dark:text-gray-200">Email</th>
+                <th className="text-left py-4 px-4 text-gray-700 dark:text-gray-200">Type</th>
+                <th className="text-left py-4 px-4 text-gray-700 dark:text-gray-200">Status</th>
+                <th className="text-left py-4 px-4 text-gray-700 dark:text-gray-200">Score</th>
+                <th className="text-left py-4 px-4 text-gray-700 dark:text-gray-200">Date</th>
                 <th className="py-4 px-4 w-10" />
               </tr>
             </thead>
@@ -730,26 +754,31 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
                       onClick={() =>
                         setExpandedId(expandedId === submission.id ? null : submission.id)
                       }
-                      className="border-b hover:bg-gray-50 cursor-pointer"
+                      className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
                     >
-                      <td className="py-4 px-4">{submission.analyst_name || '—'}</td>
-                      <td className="py-4 px-4">{submission.email || '—'}</td>
-                      <td className="py-4 px-4 capitalize">{submission.call_type}</td>
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 text-gray-900 dark:text-gray-100">
+                        {submission.analyst_name || '—'}
+                      </td>
+                      <td className="py-4 px-4 text-gray-900 dark:text-gray-100">
+                        {submission.email || '—'}
+                      </td>
+                      <td className="py-4 px-4 capitalize text-gray-900 dark:text-gray-100">
+                        {submission.call_type}
+                      </td>
+                      <td className="py-4 px-4 text-gray-900 dark:text-gray-100">
                         <StatusBadge status={submission.status} />
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 text-gray-900 dark:text-gray-100">
                         {submission.compliance_score != null ? (
                           <ProgressBar percentage={submission.compliance_score} showLabel size="sm" />
                         ) : (
                           '-'
                         )}
                       </td>
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 text-gray-900 dark:text-gray-100">
                         {new Date(submission.created_at).toLocaleDateString()}
                       </td>
-
-                      <td className="py-4 px-4" onClick={e => e.stopPropagation()}>
+                      <td className="py-4 px-4 w-16 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                         <RowProgressRing
                           submissionId={submission.id}
                           status={submission.status}
@@ -778,14 +807,8 @@ export const RecentSubmissionsTable: React.FC<RecentSubmissionsTableProps> = ({
   );
 };
 
-/* ========================= */
-/* 🔽 EXPANDED DETAILS */
-/* ========================= */
-
 const ExpandedDetails: React.FC<{ submission: AuditSubmission }> = ({ submission }) => (
   <div className="space-y-5">
-
-    {/* ✅ 1. CALL OBSERVATION (TOP PRIORITY) */}
     {submission.call_observations && (
       <div>
         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
@@ -798,20 +821,16 @@ const ExpandedDetails: React.FC<{ submission: AuditSubmission }> = ({ submission
       </div>
     )}
 
-    {/* ✅ 2. BASIC DETAILS */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-      {/* Duration */}
       <div>
         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           Call Duration
         </label>
         <p className="text-sm text-gray-900 dark:text-white mt-1">
-          {submission.call_duration || 'N/A'}
+          {formatDuration(submission.call_duration)}
         </p>
       </div>
 
-      {/* Audio */}
       <div>
         <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           Audio
@@ -819,8 +838,6 @@ const ExpandedDetails: React.FC<{ submission: AuditSubmission }> = ({ submission
 
         {submission.audio_url ? (
           <div className="relative group inline-block mt-1">
-
-            {/* Button */}
             <button
               onClick={() => window.open(submission.audio_url, '_blank')}
               className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 text-sm font-medium"
@@ -828,7 +845,6 @@ const ExpandedDetails: React.FC<{ submission: AuditSubmission }> = ({ submission
               🎧 Play Audio
             </button>
 
-            {/* Tooltip */}
             <div
               className="
                 pointer-events-none
@@ -848,14 +864,11 @@ const ExpandedDetails: React.FC<{ submission: AuditSubmission }> = ({ submission
                 {submission.audio_url}
               </div>
             </div>
-
           </div>
         ) : (
           <p className="text-sm text-gray-400 mt-1">N/A</p>
         )}
       </div>
-
     </div>
-
   </div>
 );

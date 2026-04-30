@@ -261,3 +261,12 @@ export const AUDIT_PARAMETERS_BY_CATEGORY: ParameterCategory[] = [
 export const AUDIT_PARAMETERS: string[] = AUDIT_PARAMETERS_BY_CATEGORY.flatMap(
   (cat) => cat.parameters
 );
+
+export const COORDINATOR_TYPES = [
+  { id: 'emi',        label: 'EMI / Loan' },
+  { id: 'refund',     label: 'Refund' },
+  { id: 'onboarding', label: 'Onboarding' },
+  { id: 'retention',  label: 'Retention' },
+  { id: 'support',    label: 'Support' },
+  { id: 'walkin',     label: 'Walk-in' },
+] as const;

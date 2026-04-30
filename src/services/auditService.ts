@@ -632,7 +632,7 @@
 //               email: newData?.email,
 //               created_at: newData?.created_at,
 //             } as AuditSubmission;
-            
+
 //             callback({
 //               type: payload.eventType as any,
 //               record,
@@ -704,7 +704,9 @@ export const auditService = {
     email?: string;
     analyst_name?: string;
     call_id?: string;
+    // call_duration: number;
     call_duration: number;
+    call_duration_seconds?: number; // Optional field for backward compatibility
     call_type: 'inbound' | 'outbound';
     notes?: string;
     audio_filename?: string;
@@ -716,6 +718,12 @@ export const auditService = {
     vc_platform?: string;
     lead_stage?: string;
     lsq_link?: string;
+    // ── Coordinator fields ──────────────────────
+    call_category?: 'sales' | 'coordinator';
+    coordinator_type?: string;
+    learner_email?: string;
+    lsq_id?: string;
+
   }): Promise<AuditSubmission> {
     const { data: result, error } = await supabase
       .from('audit_submissions')
@@ -738,7 +746,7 @@ export const auditService = {
   async saveWebhookError(id: string, errorMessage: string): Promise<void> {
     const { error } = await supabase
       .from('audit_submissions')
-      .update({ 
+      .update({
         webhook_sent: false,
         error_message: errorMessage,
         status: 'pending'
@@ -766,7 +774,7 @@ export const auditService = {
     if (!navigator.onLine) return [];
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, lead_stage, lsq_link, call_observations, webhook_sent, error_message, selected_parameters, media_type, notes')
+      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, lead_stage, lsq_link, call_observations, webhook_sent, error_message, selected_parameters, media_type, notes, call_category, coordinator_type, learner_email, lsq_id')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) throw error;
@@ -776,7 +784,7 @@ export const auditService = {
   async getSubmissionById(id: string): Promise<AuditSubmission | null> {
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, notes, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type')
+      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, notes, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, call_category, coordinator_type, learner_email, lsq_id')
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -896,8 +904,8 @@ export const auditService = {
   ): Promise<AuditSubmission> {
     const validStatus: AuditStatus =
       webhookResponse.status === 'passed' ||
-      webhookResponse.status === 'failed' ||
-      webhookResponse.status === 'flagged'
+        webhookResponse.status === 'failed' ||
+        webhookResponse.status === 'flagged'
         ? webhookResponse.status
         : 'failed';
 
@@ -955,8 +963,12 @@ export const auditService = {
               lsq_link: newData?.lsq_link,
               audio_url: newData?.audio_url,
               notes: newData?.notes,
+              call_category: newData?.call_category,
+              coordinator_type: newData?.coordinator_type,
+              learner_email: newData?.learner_email,
+              lsq_id: newData?.lsq_id,
             } as AuditSubmission;
-            
+
             callback({
               type: payload.eventType as any,
               record,
@@ -1004,10 +1016,10 @@ export const auditService = {
     if (error) throw error;
 
     const submissions = data || [];
-    const total       = submissions.length;
-    const passed      = submissions.filter(s => s.status === 'passed').length;
-    const failed      = submissions.filter(s => s.status === 'failed').length;
-    const flagged     = submissions.filter(s => s.status === 'flagged').length;
+    const total = submissions.length;
+    const passed = submissions.filter(s => s.status === 'passed').length;
+    const failed = submissions.filter(s => s.status === 'failed').length;
+    const flagged = submissions.filter(s => s.status === 'flagged').length;
     const validScores = submissions.filter(
       s => s.compliance_score !== null && s.compliance_score !== undefined
     );

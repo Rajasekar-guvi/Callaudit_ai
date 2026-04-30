@@ -21,6 +21,7 @@ export const SegmentedControl: React.FC<SegmentedControlProps> = ({
       <div className="flex gap-3 bg-gray-100 dark:bg-slate-800 p-1 rounded-xl">
         {options.map((option) => (
           <button
+           type="button"
             key={option.value}
             onClick={() => onChange(option.value)}
             className="flex-1 relative px-4 py-2.5 text-sm font-medium transition-colors"

@@ -208,6 +208,8 @@
 
 export type Role = 'admin' | 'user';
 export type CallType = 'inbound' | 'outbound';
+export type CallCategory = 'sales' | 'coordinator';
+export type CoordinatorType = 'emi' | 'refund' | 'onboarding' | 'retention' | 'support' | 'walkin';
 export type MediaType = 'audio' | 'video';
 export type VCPlatform = 'zoom' | 'meet' | 'teams' | 'exotel' | 'other';
 export type LeadStage = 'new-lead' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost' | 'on-hold';
@@ -225,6 +227,7 @@ export interface AuditSubmission {
   analyst_name?: string;
   call_id?: string;
   call_duration: number;
+  call_duration_seconds?: string;
   call_type: CallType;
   notes?: string;
   audio_filename?: string;
@@ -245,11 +248,16 @@ export interface AuditSubmission {
   // ── New media fields ──────────────────────────
   media_type?: MediaType;
   vc_platform?: VCPlatform;
+  call_category?: CallCategory;
+  coordinator_type?: CoordinatorType;
   // ── New lead fields ───────────────────────────
   lead_stage?: LeadStage;
   lsq_link?: string;
+  learner_email?: string;
+  lsq_id?: string;
   created_at: string;
   updated_at: string;
+  raw_transcript?: string;
   transcript_url?: string;
 }
 
@@ -266,7 +274,8 @@ export interface WebhookPayload {
   notification_email?: string;
   analyst_name?: string;
   call_id?: string;
-  call_duration: number;
+  call_duration: string;
+  call_duration_seconds?: number;
   call_type: CallType;
   notes?: string;
   audio: {
@@ -276,13 +285,16 @@ export interface WebhookPayload {
   };
   selected_parameters?: string[];
   custom_parameters?: CustomParameter[];
-  // ── VC fields ────────────────────────────────
   media_type?: MediaType;
   vc_platform?: VCPlatform;
-  // ── Lead fields ──────────────────────────────
+  call_category?: CallCategory;
+  coordinator_type?: CoordinatorType;
   lead_stage?: LeadStage;
   lsq_link?: string;
+  learner_email?: string;
+  lsq_id?: string;
 }
+
 
 export interface WebhookResponse {
   success: boolean;
@@ -316,6 +328,11 @@ export interface FormData {
   vcUrl?: string;
   vcPlatform?: VCPlatform;
   // ── New lead fields ───────────────────────────
+  callCategory?: CallCategory;
+  // ── Coordinator fields ─────────────────────────
+  coordinatorType?: CoordinatorType;
+  learnerEmail?: string;
+  lsqId?: string;
   leadStage?: LeadStage;
   lsqLink?: string;
   transcriptUrl?: string

@@ -376,12 +376,14 @@ export const AuditTable: React.FC = () => {
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AuditStatus | 'all'>('all');
-  const [agentFilter, setAgentFilter] = useState<string>('all');
+  // const [agentFilter, setAgentFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [selectedSubmission, setSelectedSubmission] = useState<AuditSubmission | null>(null);
   const [loadingSubmissionId, setLoadingSubmissionId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'sales' | 'coordinator'>('all');
+  const [leadStageFilter, setLeadStageFilter] = useState<string>('all');
 
   // ✅ Fetch FULL data when opening detail drawer
   const handleViewDetails = async (submission: AuditSubmission) => {
@@ -407,19 +409,42 @@ export const AuditTable: React.FC = () => {
     }
   };
 
-  const agents = useMemo(
-    () => ['all', ...new Set(submissions.map((s) => s.analyst_name ?? '').filter(Boolean))],
-    [submissions]
-  );
+  // const agents = useMemo(
+  //   () => ['all', ...new Set(submissions.map((s) => s.analyst_name ?? '').filter(Boolean))],
+  //   [submissions]
+  // );
+
+  const leadStages = useMemo(() => {
+    return ['all', ...new Set(submissions.map((s) => s.lead_stage ?? '').filter(Boolean))];
+  }, [submissions]);
+
+  const coordinatorTypes = useMemo(() => {
+    return [
+      'all',
+      ...new Set(submissions.map((s) => s.coordinator_type ?? '').filter(Boolean)),
+    ];
+  }, [submissions]);
 
   const filteredAndSorted = useMemo(() => {
     const filtered = submissions.filter((s) => {
+      const term = searchTerm.toLowerCase();
+
       const matchesSearch =
-        s.analyst_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.email?.toLowerCase().includes(searchTerm.toLowerCase());
+        s.analyst_name?.toLowerCase().includes(term) ||
+        s.email?.toLowerCase().includes(term) ||
+        s.call_id?.toLowerCase().includes(term);
+
       const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
-      const matchesAgent = agentFilter === 'all' || s.analyst_name === agentFilter;
-      return matchesSearch && matchesStatus && matchesAgent;
+      // const matchesAgent = agentFilter === 'all' || s.analyst_name === agentFilter;
+      const matchesCategory =
+        categoryFilter === 'all' || s.call_category === categoryFilter;
+
+      const matchesStageOrType =
+        leadStageFilter === 'all' ||
+        (s.call_category === 'sales' && s.lead_stage === leadStageFilter) ||
+        (s.call_category === 'coordinator' && s.coordinator_type === leadStageFilter);
+      return !!matchesSearch && matchesStatus && matchesCategory && matchesStageOrType;
+
     });
 
     return filtered.sort((a, b) => {
@@ -430,14 +455,13 @@ export const AuditTable: React.FC = () => {
       const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [submissions, searchTerm, statusFilter, agentFilter, sortField, sortOrder]);
+  // }, [submissions, searchTerm, statusFilter, agentFilter, categoryFilter, leadStageFilter, sortField, sortOrder]);
+  }, [submissions, searchTerm, statusFilter, categoryFilter, leadStageFilter, sortField, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
   const pageStart = (safePage - 1) * PAGE_SIZE;
   const pageData = filteredAndSorted.slice(pageStart, pageStart + PAGE_SIZE);
-  const [leadStageFilter, setLeadStageFilter] = useState<string>('all');
-  const leadStages = useMemo(() => { return ['all', ...new Set(submissions.map((s) => s.lead_stage ?? '').filter(Boolean)),]; }, [submissions]);
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     else { setSortField(field); setSortOrder('asc'); }
@@ -507,7 +531,7 @@ export const AuditTable: React.FC = () => {
           </select>
 
           {/* 👤 Analyst */}
-          <select
+          {/* <select
             value={agentFilter}
             onChange={(e) => handleFilterChange(() => setAgentFilter(e.target.value))}
             title="Filter by analyst"
@@ -518,24 +542,54 @@ export const AuditTable: React.FC = () => {
             {agents.filter((a) => a !== 'all').map((agent) => (
               <option key={agent} value={agent}>{agent}</option>
             ))}
-          </select>
+          </select> */}
 
           {/* 🎯 Lead Stage (FIXED POSITION) */}
+          {/* 🏷️ Call Category */}
+          <select
+            value={categoryFilter}
+            onChange={(e) =>
+              handleFilterChange(() =>
+                setCategoryFilter(e.target.value as 'all' | 'sales' | 'coordinator')
+              )
+            }
+            title="Filter by call category"
+            aria-label="Filter by call category"
+            className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-sm"
+          >
+            <option value="all">All Categories</option>
+            <option value="sales">Sales</option>
+            <option value="coordinator">Coordinator</option>
+          </select>
+
+          {/* 🎯 Category / Stage */}
           <select
             value={leadStageFilter}
             onChange={(e) => handleFilterChange(() => setLeadStageFilter(e.target.value))}
-            title="Filter by lead stage"
-            aria-label="Filter by lead stage"
+            title="Filter by stage or coordinator type"
+            aria-label="Filter by stage or coordinator type"
             className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800 text-sm"
           >
-            <option value="all">All Lead Stages</option>
-            {leadStages.map((leadStage: string) => (
-              <option key={leadStage} value={leadStage}>
-                {leadStage.replace('-', ' ')}
-              </option>
-            ))}
-          </select>
+            <option value="all">All Stages / Types</option>
 
+            {categoryFilter !== 'coordinator' &&
+              leadStages
+                .filter((stage) => stage !== 'all')
+                .map((leadStage: string) => (
+                  <option key={leadStage} value={leadStage}>
+                    {`Sales - ${leadStage.replace('-', ' ')}`}
+                  </option>
+                ))}
+
+            {categoryFilter !== 'sales' &&
+              coordinatorTypes
+                .filter((type) => type !== 'all')
+                .map((type: string) => (
+                  <option key={type} value={type}>
+                    {`Coordinator - ${type}`}
+                  </option>
+                ))}
+          </select>
         </div>
 
         {/* Table */}
@@ -545,9 +599,8 @@ export const AuditTable: React.FC = () => {
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 {([
                   { label: 'Email', field: 'email' },
-                  { label: 'Analyst', field: 'analyst_name' },
                   { label: 'Type', field: 'call_type' },
-                  { label: 'Lead Stage', field: null },
+                  { label: 'Category / Stage', field: null },
                   { label: 'Status', field: 'status' },
                   { label: 'Score', field: 'compliance_score' },
                   { label: 'Date', field: 'created_at' },
@@ -583,18 +636,24 @@ export const AuditTable: React.FC = () => {
                     <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
                       {submission.email || <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
-                      {submission.analyst_name || <span className="text-gray-400">—</span>}
-                    </td>
                     <td className="py-4 px-4 text-gray-600 dark:text-gray-400 capitalize">{submission.call_type}</td>
-                    <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
-                      {submission.lead_stage ? (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
-                          {submission.lead_stage.replace('-', ' ')}
+                    <td className="py-4 px-4">
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium ${submission.call_category === 'coordinator'
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                              : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                            }`}
+                        >
+                          {submission.call_category === 'coordinator' ? 'Coordinator' : 'Sales'}
                         </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+
+                        <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                          {submission.call_category === 'coordinator'
+                            ? submission.coordinator_type || '—'
+                            : submission.lead_stage?.replace('-', ' ') || '—'}
+                        </span>
+                      </div>
                     </td>
                     <td className="py-4 px-4"><StatusBadge status={submission.status} /></td>
                     <td className="py-4 px-4">
@@ -673,8 +732,8 @@ export const AuditTable: React.FC = () => {
                       key={p}
                       onClick={() => setCurrentPage(p as number)}
                       className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${safePage === p
-                          ? 'bg-blue-600 text-white'
-                          : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                     >
                       {p}
