@@ -636,6 +636,242 @@
 //   return "pending";
 // }
 
+// ------------------------------------------------------------------------------------------------------------------------
+// ------Rich realtime 
+// import { useState, useEffect, useCallback, useRef } from "react";
+// import { auditService } from "../services/auditService";
+// import { AuditSubmission, AuditStatus } from "../types";
+
+// interface UseAuditDataOptions {
+//   limit?: number;
+// }
+
+// export const useAuditData = (options?: UseAuditDataOptions) => {
+//   const { limit = 50 } = options || {};
+
+//   const [submissions, setSubmissions] = useState<AuditSubmission[]>([]);
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [error, setError] = useState<string | null>(null);
+
+//   const isFetchingRef = useRef(false);
+//   const lastDataHashRef = useRef<string | null>(null);
+//   const unsubscribeRef = useRef<(() => void) | null>(null);
+//   const submissionsRef = useRef<AuditSubmission[]>([]);
+
+//   useEffect(() => {
+//     submissionsRef.current = submissions;
+//   }, [submissions]);
+
+//   const normalizeRow = useCallback(
+//     (item: AuditSubmission): AuditSubmission => ({
+//       ...item,
+//       status: normalizeStatus(item.status),
+//       compliance_score:
+//         item.compliance_score === null || item.compliance_score === undefined
+//           ? undefined
+//           : item.compliance_score,
+//     }),
+//     []
+//   );
+
+//   const fetchSubmissions = useCallback(async () => {
+//     if (isFetchingRef.current) return;
+//     if (!navigator.onLine) return;
+
+//     isFetchingRef.current = true;
+//     setIsLoading(true);
+//     setError(null);
+
+//     try {
+//       const data = await auditService.getSubmissions(limit);
+//       const normalized = data.map(normalizeRow);
+//       const hash = JSON.stringify(normalized);
+
+//       if (lastDataHashRef.current !== hash) {
+//         lastDataHashRef.current = hash;
+//         setSubmissions(normalized);
+//       }
+//     } catch (err) {
+//       setError(err instanceof Error ? err.message : "Failed to fetch submissions");
+//     } finally {
+//       setIsLoading(false);
+//       isFetchingRef.current = false;
+//     }
+//   }, [limit, normalizeRow]);
+
+//   const patchRow = useCallback(
+//     async (id: string) => {
+//       try {
+//         const fresh = await auditService.getSubmissionById(id);
+//         if (!fresh) return;
+
+//         const normalized = normalizeRow(fresh);
+
+//         setSubmissions((prev) =>
+//           prev.map((item) =>
+//             item.id === id
+//               ? { ...item, ...normalized }
+//               : item
+//           )
+//         );
+//       } catch {
+//         // silently ignore
+//       }
+//     },
+//     [normalizeRow]
+//   );
+
+//   const setupRealtime = useCallback(() => {
+//     unsubscribeRef.current?.();
+
+//     unsubscribeRef.current = auditService.subscribeToSubmissions(
+//       (payload) => {
+//         const normalized = normalizeRow(payload.record);
+
+//         if (payload.type === "INSERT") {
+//           setSubmissions((prev) => {
+//             const existingIndex = prev.findIndex((s) => s.id === normalized.id);
+
+//             if (existingIndex !== -1) {
+//               return prev.map((item) =>
+//                 item.id === normalized.id
+//                   ? { ...item, ...normalized }
+//                   : item
+//               );
+//             }
+
+//             return [normalized, ...prev];
+//           });
+//           return;
+//         }
+
+//         if (payload.type === "UPDATE") {
+//           setSubmissions((prev) =>
+//             prev.map((item) =>
+//               item.id === normalized.id
+//                 ? { ...item, ...normalized }
+//                 : item
+//             )
+//           );
+//           return;
+//         }
+
+//         if (payload.type === "DELETE") {
+//           setSubmissions((prev) =>
+//             prev.filter((item) => item.id !== normalized.id)
+//           );
+//         }
+//       },
+//       () => {
+//         console.warn("Channel dropped — reconnecting...");
+//         setTimeout(() => setupRealtime(), 1000);
+//       }
+//     );
+//   }, [normalizeRow]);
+
+//   useEffect(() => {
+//     fetchSubmissions();
+//     setupRealtime();
+
+//     return () => {
+//       unsubscribeRef.current?.();
+//     };
+//   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+//   useEffect(() => {
+//     const interval = setInterval(async () => {
+//       if (!navigator.onLine) return;
+
+//       const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
+//       const activeRows = submissionsRef.current.filter((s) => {
+//         if (s.status === "pending" && s.webhook_sent === false) return false;
+//         if (new Date(s.created_at).getTime() < thirtyMinsAgo) return false;
+//         return s.status === "pending" || s.status === "processing";
+//       });
+
+//       if (activeRows.length === 0) return;
+
+//       activeRows.forEach((s) => {
+//         void patchRow(s.id);
+//       });
+//     }, 10000);
+
+//     return () => clearInterval(interval);
+//   }, [patchRow]);
+
+//   useEffect(() => {
+//     const handleOnline = () => {
+//       setupRealtime();
+//       fetchSubmissions();
+//     };
+
+//     window.addEventListener("online", handleOnline);
+//     return () => window.removeEventListener("online", handleOnline);
+//   }, [setupRealtime, fetchSubmissions]);
+
+//   const getSubmissionById = useCallback(
+//     async (id: string) => {
+//       try {
+//         const submission = await auditService.getSubmissionById(id);
+//         if (!submission) return null;
+//         return normalizeRow(submission);
+//       } catch (err) {
+//         setError(err instanceof Error ? err.message : "Failed to fetch submission");
+//         return null;
+//       }
+//     },
+//     [normalizeRow]
+//   );
+
+//   const getSubmissionByIdFull = useCallback(
+//     async (id: string) => {
+//       try {
+//         const submission = await auditService.getSubmissionByIdFull(id);
+//         if (!submission) return null;
+//         return normalizeRow(submission);
+//       } catch (err) {
+//         setError(err instanceof Error ? err.message : "Failed to fetch submission details");
+//         return null;
+//       }
+//     },
+//     [normalizeRow]
+//   );
+
+//   const checkCallIdExists = useCallback(async (callId?: string) => {
+//     if (!callId) return false;
+//     try {
+//       return await auditService.checkCallIdExists(callId);
+//     } catch {
+//       return false;
+//     }
+//   }, []);
+
+//   return {
+//     submissions,
+//     isLoading,
+//     error,
+//     fetchSubmissions,
+//     getSubmissionById,
+//     getSubmissionByIdFull,
+//     checkCallIdExists,
+//   };
+// };
+
+// function normalizeStatus(status: AuditStatus | string): AuditStatus {
+//   if (
+//     status === "pending" ||
+//     status === "processing" ||
+//     status === "passed" ||
+//     status === "failed" ||
+//     status === "flagged"
+//   ) {
+//     return status;
+//   }
+
+//   return "pending";
+// }
+
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { auditService } from "../services/auditService";
 import { AuditSubmission, AuditStatus } from "../types";
@@ -653,7 +889,6 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
 
   const isFetchingRef = useRef(false);
   const lastDataHashRef = useRef<string | null>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
   const submissionsRef = useRef<AuditSubmission[]>([]);
 
   useEffect(() => {
@@ -719,65 +954,12 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
     [normalizeRow]
   );
 
-  const setupRealtime = useCallback(() => {
-    unsubscribeRef.current?.();
-
-    unsubscribeRef.current = auditService.subscribeToSubmissions(
-      (payload) => {
-        const normalized = normalizeRow(payload.record);
-
-        if (payload.type === "INSERT") {
-          setSubmissions((prev) => {
-            const existingIndex = prev.findIndex((s) => s.id === normalized.id);
-
-            if (existingIndex !== -1) {
-              return prev.map((item) =>
-                item.id === normalized.id
-                  ? { ...item, ...normalized }
-                  : item
-              );
-            }
-
-            return [normalized, ...prev];
-          });
-          return;
-        }
-
-        if (payload.type === "UPDATE") {
-          setSubmissions((prev) =>
-            prev.map((item) =>
-              item.id === normalized.id
-                ? { ...item, ...normalized }
-                : item
-            )
-          );
-          return;
-        }
-
-        if (payload.type === "DELETE") {
-          setSubmissions((prev) =>
-            prev.filter((item) => item.id !== normalized.id)
-          );
-        }
-      },
-      () => {
-        console.warn("Channel dropped — reconnecting...");
-        setTimeout(() => setupRealtime(), 1000);
-      }
-    );
-  }, [normalizeRow]);
+  useEffect(() => {
+    void fetchSubmissions();
+  }, [fetchSubmissions]);
 
   useEffect(() => {
-    fetchSubmissions();
-    setupRealtime();
-
-    return () => {
-      unsubscribeRef.current?.();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
+    const interval = setInterval(() => {
       if (!navigator.onLine) return;
 
       const thirtyMinsAgo = Date.now() - 30 * 60 * 1000;
@@ -792,20 +974,19 @@ export const useAuditData = (options?: UseAuditDataOptions) => {
       activeRows.forEach((s) => {
         void patchRow(s.id);
       });
-    }, 10000);
+    }, 20000);
 
     return () => clearInterval(interval);
   }, [patchRow]);
 
   useEffect(() => {
     const handleOnline = () => {
-      setupRealtime();
-      fetchSubmissions();
+      void fetchSubmissions();
     };
 
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-  }, [setupRealtime, fetchSubmissions]);
+  }, [fetchSubmissions]);
 
   const getSubmissionById = useCallback(
     async (id: string) => {

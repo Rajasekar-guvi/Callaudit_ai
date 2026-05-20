@@ -265,7 +265,7 @@ export const useWebhookSubmit = () => {
       }
 
       const vcPlatform = isVC ? detectVCPlatform(mediaUrl) : undefined;
-
+      
       const submission = await auditService.createSubmission({
         email: formData.email || undefined,
         analyst_name: formData.analystName || undefined,
@@ -337,6 +337,8 @@ export const useWebhookSubmit = () => {
         ...(baseFormData.customParameters?.map((p) => p.name) || []),
       ];
 
+      const isCoordinator = baseFormData.callCategory === 'coordinator';
+
       const results = [...bulkItems];
       const submittedIds: string[] = [];
 
@@ -347,23 +349,35 @@ export const useWebhookSubmit = () => {
         onProgress([...results]);
 
         try {
-          const submission = await auditService.createSubmission({
+          const submissionData: any = {
             email: baseFormData.email || undefined,
             analyst_name: baseFormData.analystName || undefined,
             call_id: baseFormData.callId || undefined,
-            // call_duration: baseFormData.callDuration || '',
             call_duration: baseFormData.callDuration
               ? webhookService.parseTimeToSeconds(baseFormData.callDuration)
               : 0,
             call_type: baseFormData.callType,
             notes: baseFormData.notes || undefined,
             audio_url: results[i].url,
-            selected_parameters: allSelectedParams,
-            custom_parameters: baseFormData.customParameters || [],
             media_type: 'audio',
-            lead_stage: baseFormData.leadStage,
-            lsq_link: baseFormData.lsqLink,
-          });
+            call_category: baseFormData.callCategory || 'sales',
+          };
+
+          if (isCoordinator) {
+            submissionData.coordinator_type = baseFormData.coordinatorType || undefined;
+            submissionData.learner_email = baseFormData.learnerEmail || undefined;
+            submissionData.lsq_id = baseFormData.lsqId || undefined;
+            submissionData.lsq_link = baseFormData.lsqLink || undefined;
+            submissionData.selected_parameters = [];
+            submissionData.custom_parameters = [];
+          } else {
+            submissionData.selected_parameters = allSelectedParams;
+            submissionData.custom_parameters = baseFormData.customParameters || [];
+            submissionData.lead_stage = baseFormData.leadStage;
+            submissionData.lsq_link = baseFormData.lsqLink;
+          }
+
+          const submission = await auditService.createSubmission(submissionData);
 
           const payload = webhookService.transformFormDataToPayload({
             ...baseFormData,

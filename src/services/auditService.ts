@@ -774,7 +774,7 @@ export const auditService = {
     if (!navigator.onLine) return [];
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, lead_stage, lsq_link, call_observations, webhook_sent, error_message, selected_parameters, media_type, notes, call_category, coordinator_type, learner_email, lsq_id')
+      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, notes, call_category, coordinator_type, learner_email, lsq_id, call_observations')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) throw error;
@@ -784,7 +784,7 @@ export const auditService = {
   async getSubmissionById(id: string): Promise<AuditSubmission | null> {
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, notes, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, call_category, coordinator_type, learner_email, lsq_id')
+      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, notes, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, call_category, coordinator_type, learner_email, lsq_id, call_observations')
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -799,7 +799,35 @@ export const auditService = {
   async getSubmissionByIdFull(id: string): Promise<AuditSubmission | null> {
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('*')
+      .select(`
+        id,
+        email,
+        analyst_name,
+        call_id,
+        call_duration,
+        call_type,
+        notes,
+        audio_url,
+        status,
+        compliance_score,
+        violations,
+        transcript,
+        transcript_url,
+        raw_transcript,
+        spoken_evidence,
+        webhook_response,
+        webhook_sent,
+        error_message,
+        call_observations,
+        selected_parameters,
+        parameter_scores,
+        media_type,
+        vc_platform,
+        lead_stage,
+        lsq_link,
+        created_at,
+        updated_at
+      `)
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -933,12 +961,42 @@ export const auditService = {
     }) => void,
     onReconnectNeeded?: () => void
   ) {
-    const channelName = `audit_submissions_${Date.now()}`;
+    const channelName = 'audit_submissions_realtime';
     const channel = supabase
       .channel(channelName)
+      // ── INSERT with stripped payload (instant new submissions, minimal egress) ──
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'audit_submissions' },
+        { event: 'INSERT', schema: 'public', table: 'audit_submissions' },
+        (payload) => {
+          try {
+            const newData = payload.new as any;
+            // Minimal fields for new submissions — instant display
+            const record = {
+              id: newData?.id,
+              email: newData?.email,
+              status: newData?.status,
+              created_at: newData?.created_at,
+              call_id: newData?.call_id,
+              analyst_name: newData?.analyst_name,
+              call_type: newData?.call_type,
+              call_duration: newData?.call_duration,
+              audio_url: newData?.audio_url,
+            } as AuditSubmission;
+
+            callback({
+              type: 'INSERT',
+              record,
+            });
+          } catch (err) {
+            console.error('Realtime INSERT error:', err);
+          }
+        }
+      )
+      // ── UPDATE with full stripped payload (live status changes) ──
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'audit_submissions' },
         (payload) => {
           try {
             const newData = payload.new as any;
@@ -974,7 +1032,7 @@ export const auditService = {
               record,
             });
           } catch (err) {
-            console.error('Realtime processing error:', err);
+            console.error('Realtime UPDATE error:', err);
           }
         }
       )

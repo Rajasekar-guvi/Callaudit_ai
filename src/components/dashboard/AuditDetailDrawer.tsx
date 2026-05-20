@@ -2185,7 +2185,7 @@ export const AuditDetailDrawer: React.FC<AuditDetailDrawerProps> = ({ submission
 
           {submission.audio_url && submission.status !== 'pending' && (
             <Section title="Audio Playback">
-              <audio controls className="w-full rounded-lg" src={submission.audio_url}>
+              <audio controls preload="none" className="w-full rounded-lg" src={submission.audio_url}>
                 Your browser does not support audio playback.
               </audio>
             </Section>

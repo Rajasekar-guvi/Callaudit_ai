@@ -2212,8 +2212,18 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
   const handleCallCategoryChange = (cat: CallCategory) => {
     setCallCategory(cat);
     patchForm({ callCategory: cat });
-    if (cat === 'coordinator') setSubmitMode('single');
+
+    if (cat === 'sales' && !formData.leadStage) {
+      patchForm({ callCategory: cat, leadStage: 'new-lead' });
+      return;
+    }
+
+    if (cat === 'coordinator') {
+      patchForm({ callCategory: cat, leadStage: undefined });
+      return;
+    }
   };
+
   const handleSubmitModeChange = (mode: 'single' | 'bulk') => {
     setSubmitMode(mode);
     patchForm({
@@ -2307,7 +2317,6 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
     setPastedUrls(urls);
     await validateBulkUrls(urls);
   };
-
   const handleBulkSubmit = async () => {
     const validCount = bulkItems.filter((i) => i.status === 'valid').length;
     if (validCount === 0) {
@@ -2318,13 +2327,17 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
       showToast('Email is required', 'error');
       return;
     }
+    if (callCategory === 'coordinator' && !formData.coordinatorType) {
+      showToast('Coordinator Call Type is required', 'error');
+      return;
+    }
 
     setBulkProgress(bulkItems);
     setBulkDone(false);
 
     const submittedIds = await submitBulk(
       bulkItems,
-      { ...formData, mediaType: 'audio' },
+      { ...formData, mediaType: 'audio', callCategory },
       (updated) => setBulkProgress([...updated])
     );
 
@@ -2333,6 +2346,7 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
     showToast(`${validCount} audits submitted successfully`, 'success');
     onSuccess?.();
   };
+
   const validateField = async (field: string, value: string): Promise<string | null> => {
     switch (field) {
       case 'email': {
@@ -2553,12 +2567,22 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
       showToast(webhookError || 'Failed to submit audit', 'error');
     }
   };
-
   const progress = (() => {
-    const urlFilled = mediaType === 'video' ? !!formData.vcUrl : !!formData.audioUrl;
+    const bulkUrlFilled =
+      submitMode === 'bulk' && bulkItems.some((item) => item.status === 'valid');
+
+    const singleUrlFilled =
+      mediaType === 'video' ? !!formData.vcUrl : !!formData.audioUrl;
+
+    const urlFilled =
+      submitMode === 'bulk'
+        ? bulkUrlFilled
+        : singleUrlFilled;
+
     const filled = [!!formData.email, urlFilled].filter(Boolean).length;
     return Math.round((filled / 2) * 100);
   })();
+
 
   const selectedCount =
     (formData.selectedParameters?.length || 0) + (formData.customParameters?.length || 0);
@@ -2657,7 +2681,7 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                       </div>
                     </div>
 
-                    {mediaType === 'audio' && callCategory === 'sales' && (
+                    {mediaType === 'audio' && (callCategory === 'sales' || callCategory === 'coordinator') && (
                       <div>
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                           Submission Mode
@@ -2787,7 +2811,7 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                   />
                 )}
 
-                {callCategory === 'coordinator' && (
+                {callCategory === 'coordinator' && mediaType === 'audio' && (
                   // <div className="rounded-2xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-900/10 p-4 space-y-4">
                   <div className="rounded-2xl border border-blue-200 dark:border-blue-900/40 bg-blue-50/50 dark:bg-blue-900/10 p-4 space-y-4">
                     {/* <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
@@ -3020,17 +3044,24 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                         </div>
                       </div>
                     )}
-
-                    {!bulkDone && bulkValid > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleBulkSubmit}
-                        disabled={isLoading || !formData.email}
-                        className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
-                        style={{ background: 'linear-gradient(135deg, #7c5af3, #e94d8c)' }}
-                      >
-                        {isLoading ? 'Submitting...' : `Submit ${bulkValid} Audit${bulkValid > 1 ? 's' : ''}`}
-                      </button>
+                    {callCategory === 'sales' && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Lead Stage
+                        </p>
+                        <select
+                          value={formData.leadStage || 'new-lead'}
+                          onChange={(e) => patchForm({ leadStage: e.target.value as any })}
+                          aria-label="Lead Stage"
+                          className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                          {LEAD_STAGES.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stage.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                   </div>
                 )}
@@ -3345,7 +3376,28 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                 )}
               </div>
             )}
-
+            {submitMode === 'bulk' && !bulkDone && (
+              <motion.div className="pt-4">
+                <button
+                  type="button"
+                  onClick={handleBulkSubmit}
+                  disabled={
+                    isLoading ||
+                    !formData.email ||
+                    bulkValid === 0 ||
+                    (callCategory === 'coordinator' && !formData.coordinatorType)
+                  }
+                  className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, #7c5af3, #e94d8c)' }}
+                >
+                  {isLoading
+                    ? 'Submitting...'
+                    : bulkValid > 0
+                      ? `Submit ${bulkValid} Audit${bulkValid > 1 ? 's' : ''}`
+                      : 'Submit Audits'}
+                </button>
+              </motion.div>
+            )}
             {submitMode === 'single' && (
               <motion.div className="flex gap-4 pt-4">
                 <GradientButton
