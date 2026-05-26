@@ -2987,6 +2987,24 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                       </div>
                     )}
 
+                    {bulkValid > 5 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-3 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex gap-3"
+                      >
+                        <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-red-900 dark:text-red-100">
+                            Bulk mode limited to 5 URLs max
+                          </p>
+                          <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                            You have {bulkValid} valid URLs. Please submit up to 5 at a time, then submit remaining URLs in a new batch.
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+
                     {bulkProgress.length > 0 && (
                       <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
                         <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
@@ -3385,6 +3403,7 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                     isLoading ||
                     !formData.email ||
                     bulkValid === 0 ||
+                    bulkValid > 5 ||
                     (callCategory === 'coordinator' && !formData.coordinatorType)
                   }
                   className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
@@ -3392,9 +3411,11 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                 >
                   {isLoading
                     ? 'Submitting...'
-                    : bulkValid > 0
-                      ? `Submit ${bulkValid} Audit${bulkValid > 1 ? 's' : ''}`
-                      : 'Submit Audits'}
+                    : bulkValid > 5
+                      ? 'Reduce to 5 URLs max'
+                      : bulkValid > 0
+                        ? `Submit ${bulkValid} Audit${bulkValid > 1 ? 's' : ''}`
+                        : 'Submit Audits'}
                 </button>
               </motion.div>
             )}

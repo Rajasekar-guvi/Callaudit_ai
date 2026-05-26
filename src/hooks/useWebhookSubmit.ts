@@ -330,6 +330,16 @@ export const useWebhookSubmit = () => {
       baseFormData: FormData,
       onProgress: (updated: BulkUrlItem[]) => void
     ): Promise<string[]> => {
+      // ⚠️ Bulk mode limit: max 5 URLs per batch
+      const MAX_BULK_URLS = 5;
+      const validItems = bulkItems.filter(i => i.status === 'valid');
+      
+      if (validItems.length > MAX_BULK_URLS) {
+        const error = `Bulk mode limited to ${MAX_BULK_URLS} URLs max. You have ${validItems.length}. Please submit in multiple batches.`;
+        setState({ isLoading: false, error, success: false });
+        throw new Error(error);
+      }
+
       setState({ isLoading: true, error: null, success: false });
 
       const allSelectedParams = [
