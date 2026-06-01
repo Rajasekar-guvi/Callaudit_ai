@@ -2483,11 +2483,12 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
   const isFormValid = () => {
     const urlValid = mediaType === 'video' ? !!formData.vcUrl : !!formData.audioUrl;
     const coordinatorValid = callCategory === 'coordinator' ? !!formData.coordinatorType : true;
+    const durationValid = submitMode === 'single' ? !!formData.callDuration : true;
 
     return (
       !!formData.email &&
-      !!formData.callDuration &&
       urlValid &&
+      durationValid &&
       coordinatorValid &&
       !errors.email &&
       !errors.audioUrl &&
@@ -2510,7 +2511,11 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
     //   const error = await validateField(field, val);
     //   if (error) setErrors((prev) => ({ ...prev, [field]: error }));
     // }
-    const fieldsToValidate = ['email', urlField, 'callDuration'];
+    const fieldsToValidate = ['email', urlField];
+    
+    if (submitMode === 'single') {
+      fieldsToValidate.push('callDuration');
+    }
 
     if (callCategory === 'coordinator') {
       fieldsToValidate.push('coordinatorType');
@@ -2771,6 +2776,17 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                       onBlur={() => handleFieldBlur('vcUrl')}
                       placeholder="https://zoom.us/rec/... or meet.google.com/..."
                       error={errors.vcUrl}
+                    />
+
+                    <FloatingLabelInput
+                      label="Call Duration"
+                      icon={Clock}
+                      type="text"
+                      value={formData.callDuration || ''}
+                      onChange={(v) => patchForm({ callDuration: v })}
+                      onBlur={() => handleFieldBlur('callDuration')}
+                      placeholder="MM:SS"
+                      error={errors.callDuration}
                     />
 
                     {vcPlatformDetected && (

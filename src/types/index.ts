@@ -226,8 +226,8 @@ export interface AuditSubmission {
   email?: string;
   analyst_name?: string;
   call_id?: string;
-  call_duration: number;
-  call_duration_seconds?: string;
+  call_duration: string | number;
+  call_duration_seconds?: number;
   call_type: CallType;
   notes?: string;
   audio_filename?: string;

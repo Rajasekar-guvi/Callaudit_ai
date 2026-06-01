@@ -655,7 +655,13 @@ export const AuditTable: React.FC = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="py-4 px-4"><StatusBadge status={submission.status} /></td>
+                    <td className="py-4 px-4">
+                      <StatusBadge
+                        status={submission.status}
+                        webhookSent={(submission as any).webhook_sent}
+                        errorMessage={submission.error_message}
+                      />
+                    </td>
                     <td className="py-4 px-4">
                       {submission.compliance_score != null ? (
                         <ProgressBar percentage={submission.compliance_score} showLabel size="sm" />

@@ -704,9 +704,8 @@ export const auditService = {
     email?: string;
     analyst_name?: string;
     call_id?: string;
-    // call_duration: number;
-    call_duration: number;
-    call_duration_seconds?: number; // Optional field for backward compatibility
+    call_duration: string | number;
+    call_duration_seconds?: number;
     call_type: 'inbound' | 'outbound';
     notes?: string;
     audio_filename?: string;
@@ -774,7 +773,7 @@ export const auditService = {
     if (!navigator.onLine) return [];
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, notes, call_category, coordinator_type, learner_email, lsq_id, call_observations')
+      .select('id, email, call_id, audio_url, status, compliance_score, created_at,  call_duration_seconds, call_duration, analyst_name, call_type, updated_at, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, notes, call_category, coordinator_type, learner_email, lsq_id, call_observations')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     if (error) throw error;
@@ -784,7 +783,7 @@ export const auditService = {
   async getSubmissionById(id: string): Promise<AuditSubmission | null> {
     const { data, error } = await supabase
       .from('audit_submissions')
-      .select('id, email, call_id, audio_url, status, compliance_score, created_at, call_duration, analyst_name, call_type, updated_at, notes, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, call_category, coordinator_type, learner_email, lsq_id, call_observations')
+      .select('id, email, call_id, audio_url, status, compliance_score, created_at,  call_duration_seconds, call_duration, analyst_name, call_type, updated_at, notes, lead_stage, lsq_link, webhook_sent, error_message, selected_parameters, media_type, call_category, coordinator_type, learner_email, lsq_id, call_observations')
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
@@ -804,6 +803,7 @@ export const auditService = {
         email,
         analyst_name,
         call_id,
+        call_duration_seconds,
         call_duration,
         call_type,
         notes,
@@ -981,6 +981,7 @@ export const auditService = {
               analyst_name: newData?.analyst_name,
               call_type: newData?.call_type,
               call_duration: newData?.call_duration,
+              call_duration_seconds: newData?.call_duration_seconds,
               audio_url: newData?.audio_url,
             } as AuditSubmission;
 
@@ -1011,6 +1012,7 @@ export const auditService = {
               call_id: newData?.call_id,
               call_type: newData?.call_type,
               call_duration: newData?.call_duration,
+              call_duration_seconds: newData?.call_duration_seconds,
               created_at: newData?.created_at,
               updated_at: newData?.updated_at,
               webhook_sent: newData?.webhook_sent,

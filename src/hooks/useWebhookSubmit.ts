@@ -270,8 +270,8 @@ export const useWebhookSubmit = () => {
         email: formData.email || undefined,
         analyst_name: formData.analystName || undefined,
         call_id: formData.callId || undefined,
-        // call_duration: formData.callDuration || '',
-        call_duration: formData.callDuration
+        call_duration: formData.callDuration || '',
+        call_duration_seconds: formData.callDuration
           ? webhookService.parseTimeToSeconds(formData.callDuration)
           : 0,
         call_type: formData.callType,
@@ -448,6 +448,7 @@ export const useWebhookSubmit = () => {
         analyst_name: submission.analyst_name,
         call_id: submission.call_id,
         call_duration: submission.call_duration,
+        call_duration_seconds: submission.call_duration_seconds || 0,
         call_type: submission.call_type,
         notes: submission.notes,
         audio: { filename: 'audio_url', size: 0, url: submission.audio_url },
