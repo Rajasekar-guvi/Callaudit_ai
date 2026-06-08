@@ -1,0 +1,23 @@
+
+#VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRkYXp5d29oZnRxdnliY2ZneXRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY1NzY1MzAsImV4cCI6MjA4MjE1MjUzMH0.aDPE46qMGF4p1XWQYh1S16NZt1RfRJViFkJcnTkFxAE
+#sb_publishable_y_GmLQdxwPNRuccx-LQ2xw_bDJK4USy
+# ao+VITE_SUPABASE_ANON_KEY=sb_publishable_y_GmLQdxwPNRuccx-LQ2xw_bDJK4USy
+
+# new_one_temp
+VITE_SUPABASE_ANON_KEY=sb_publishable_hpZi2EknSRpQELwdEXLIrA_iEZr1FCP
+#VITE_SUPABASE_URL=https://ddazywohftqvybcfgyte.supabase.co
+#ao+VITE_SUPABASE_URL=https://rvycdlitikppkeofhsim.supabase.co
+
+# new_one_temp
+VITE_SUPABASE_URL=https://ccfkmlujpsiehqutwgda.supabase.co
+
+# n8n Webhook Configuration
+#VITE_N8N_WEBHOOK_URL=https://n8n.yogeshh.in/webhook/call-audit
+#VITE_N8N_WEBHOOK_URL=https://n8n.yogeshh.in/webhook-test/call-audit
+#VITE_N8N_WEBHOOK_URL=https://n8n.codingpuppet.com/webhook/call-audit-development
+
+VITE_N8N_WEBHOOK_URL=https://n8n.codingpuppet.com/webhook/call-audit-v2
+
+# VITE_N8N_WEBHOOK_URL=https://n8n.yogeshh.in/webhook-test/call-audit
+#https://ddazywohftqvybcfgyte.supabase.co
+#1HIiz86Man1N8o4w- supabase password   

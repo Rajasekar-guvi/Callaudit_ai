@@ -301,7 +301,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ChevronDown, Eye, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Search, ChevronDown, Eye, ChevronLeft, ChevronRight, RefreshCw, FileAudio, Video } from 'lucide-react';
 import { GlassmorphismCard } from '../ui/GlassmorphismCard';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ProgressBar } from '../ui/ProgressBar';
@@ -370,7 +370,6 @@ const RetryButton: React.FC<{ submission: AuditSubmission; onRetried: () => void
     </button>
   );
 };
-
 export const AuditTable: React.FC = () => {
   const { submissions = [], isLoading, fetchSubmissions, getSubmissionByIdFull } = useAuditData();
   const { showToast } = useToast();
@@ -455,7 +454,7 @@ export const AuditTable: React.FC = () => {
       const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  // }, [submissions, searchTerm, statusFilter, agentFilter, categoryFilter, leadStageFilter, sortField, sortOrder]);
+    // }, [submissions, searchTerm, statusFilter, agentFilter, categoryFilter, leadStageFilter, sortField, sortOrder]);
   }, [submissions, searchTerm, statusFilter, categoryFilter, leadStageFilter, sortField, sortOrder]);
 
   const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
@@ -636,13 +635,29 @@ export const AuditTable: React.FC = () => {
                     <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
                       {submission.email || <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="py-4 px-4 text-gray-600 dark:text-gray-400 capitalize">{submission.call_type}</td>
+                    <td className="py-4 px-4 text-gray-600 dark:text-gray-400">
+                      <div className="inline-flex items-center gap-2">
+                        <span className="capitalize">{submission.call_type || '—'}</span>
+
+                        {submission.media_type === 'video' ? (
+                          <Video
+                            className="h-4 w-4 text-blue-500"
+                            aria-label="Video call"
+                          />
+                        ) : (
+                          <FileAudio
+                            className="h-4 w-4 text-slate-400 dark:text-slate-500"
+                            aria-label="Audio call"
+                          />
+                        )}
+                      </div>
+                    </td>
                     <td className="py-4 px-4">
                       <div className="flex flex-col gap-1">
                         <span
                           className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium ${submission.call_category === 'coordinator'
-                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                              : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                            : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
                             }`}
                         >
                           {submission.call_category === 'coordinator' ? 'Coordinator' : 'Sales'}

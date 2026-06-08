@@ -881,15 +881,14 @@ export const auditService = {
   }> {
     if (!audioUrl) return { isDuplicate: false };
 
-    const twentyFourHoursAgo = new Date(
-      Date.now() - 24 * 60 * 60 * 1000
-    ).toISOString();
+    // const twentyFourHoursAgo = new Date(
+    //   Date.now() - 24 * 60 * 60 * 1000
+    // ).toISOString();
 
     const { data, error } = await supabase
       .from('audit_submissions')
       .select('id, created_at')
       .eq('audio_url', audioUrl)
-      .gt('created_at', twentyFourHoursAgo)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

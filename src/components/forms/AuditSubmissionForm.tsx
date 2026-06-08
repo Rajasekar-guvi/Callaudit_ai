@@ -2778,7 +2778,7 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                       error={errors.vcUrl}
                     />
 
-                    <FloatingLabelInput
+                    {/* <FloatingLabelInput
                       label="Call Duration"
                       icon={Clock}
                       type="text"
@@ -2787,7 +2787,7 @@ export const AuditSubmissionForm: React.FC<AuditSubmissionFormProps> = ({ onSucc
                       onBlur={() => handleFieldBlur('callDuration')}
                       placeholder="MM:SS"
                       error={errors.callDuration}
-                    />
+                    /> */}
 
                     {vcPlatformDetected && (
                       <div className="mt-2 flex items-center gap-2">
